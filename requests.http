@@ -1,0 +1,48 @@
+@baseUrl = http://localhost:8080
+@ownerUsername = owner
+@ownerPassword = owner123
+@clientUsername = client
+@clientPassword = client123
+
+### Search books as a client
+GET {{baseUrl}}/api/books?query=clean&availableOnly=true
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+
+### Add a book as the owner
+POST {{baseUrl}}/api/books
+Authorization: Basic {{ownerUsername}} {{ownerPassword}}
+Content-Type: application/json
+
+{
+  "isbn": "9780321356680",
+  "title": "Effective Java",
+  "author": "Joshua Bloch",
+  "description": "Best practices for the Java platform.",
+  "totalCopies": 2
+}
+
+### Borrow a seeded book as the client
+POST {{baseUrl}}/api/loans
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+
+{
+  "bookId": 1,
+  "loanDays": 14
+}
+
+> {%
+    client.global.set("loanId", response.body.id);
+%}
+
+### Return the loan created above
+POST {{baseUrl}}/api/loans/{{loanId}}/return
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+
+### View the client's loan history
+GET {{baseUrl}}/api/loans/my
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+
+### View all history as the owner
+GET {{baseUrl}}/api/loans/history
+Authorization: Basic {{ownerUsername}} {{ownerPassword}}

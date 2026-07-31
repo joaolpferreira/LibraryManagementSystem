@@ -1,0 +1,1495 @@
+{
+  "info": {
+    "_postman_id": "03bd72ed-a180-43c7-8dfa-e9bd22f989a0",
+    "name": "Library Management System - Core Functionalities",
+    "description": "Requests organized exactly by the six Core Functionalities from the exercise. Run the collection from top to bottom. Folder 2 creates isolated test data and stores loanId, folder 3 returns that loan, folder 4 demonstrates owner inventory management and cleans up temporary books, folder 5 verifies the historical fields, and folder 6 verifies role separation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "ownerUsername",
+      "value": "owner",
+      "type": "string"
+    },
+    {
+      "key": "ownerPassword",
+      "value": "owner123",
+      "type": "string"
+    },
+    {
+      "key": "clientUsername",
+      "value": "client",
+      "type": "string"
+    },
+    {
+      "key": "clientPassword",
+      "value": "client123",
+      "type": "string"
+    },
+    {
+      "key": "seedBookId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "demoIsbn",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "createdBookId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "loanId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "borrowIsbn",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "borrowBookId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1 - View Books",
+      "description": "Both roles can view and search the list of active books.",
+      "item": [
+        {
+          "name": "Client can view books",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Client receives the inventory\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.be.an(\"array\");",
+                  "    pm.expect(body.page.totalElements).to.be.at.least(3);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner can view books",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Owner receives the inventory\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().content).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search available books",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books?query=clean&availableOnly=true&page=0&size=20&sort=title,asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "clean"
+                },
+                {
+                  "key": "availableOnly",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "sort",
+                  "value": "title,asc"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Search returns Clean Code\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const books = pm.response.json().content;",
+                  "    pm.expect(books.some(book => book.title === \"Clean Code\")).to.be.true;",
+                  "    pm.expect(books.every(book => book.available === true)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get seeded book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{seedBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{seedBookId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Seeded book can be retrieved\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"seedBookId\")));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 - Borrow Book",
+      "description": "Clients can borrow an available book. The setup request creates isolated test data; the successful borrow saves loanId for the following folders.",
+      "item": [
+        {
+          "name": "Setup - Create an available book for the borrow test",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now().toString().slice(-10).padStart(10, \"0\");",
+                  "pm.collectionVariables.set(\"borrowIsbn\", `978${suffix}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Borrow-test book is created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const book = pm.response.json();",
+                  "pm.collectionVariables.set(\"borrowBookId\", book.id);",
+                  "pm.test(\"Borrow-test book is available\", function () {",
+                  "    pm.expect(book.isbn).to.eql(pm.collectionVariables.get(\"borrowIsbn\"));",
+                  "    pm.expect(book.availableCopies).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"{{borrowIsbn}}\",\n  \"title\": \"Postman Demo Book\",\n  \"author\": \"Postman Runner\",\n  \"description\": \"Created automatically by the Postman collection.\",\n  \"totalCopies\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Client borrows an available book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookId\": {{borrowBookId}},\n  \"loanDays\": 14\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans"
+              ]
+            },
+            "description": "Borrows the available book created by the setup request and stores the returned loan ID for the Return Book and Book History folders."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Client borrows an available copy\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const loan = pm.response.json();",
+                  "pm.collectionVariables.set(\"loanId\", loan.id);",
+                  "pm.test(\"Loan is active\", function () {",
+                  "    pm.expect(loan.status).to.eql(\"ACTIVE\");",
+                  "    pm.expect(loan.returnedAt).to.eql(null);",
+                  "    pm.expect(loan.returnedLate).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Client cannot borrow the same book twice",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookId\": {{borrowBookId}},\n  \"loanDays\": 14\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Duplicate active loan returns 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 - Return Book",
+      "description": "Clients can return their active loans; attempting the same return twice produces a conflict.",
+      "item": [
+        {
+          "name": "Client returns the loan",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/return",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "{{loanId}}",
+                "return"
+              ]
+            },
+            "description": "Returns the active loan. The Spring Boot console should also log the after-commit BookReturnedEvent."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Client returns the loan\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const loan = pm.response.json();",
+                  "    pm.expect(loan.status).to.eql(\"RETURNED_ON_TIME\");",
+                  "    pm.expect(loan.returnedLate).to.eql(false);",
+                  "    pm.expect(loan.returnedAt).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Returning the same loan again fails",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/return",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "{{loanId}}",
+                "return"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Repeated return produces a conflict\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4 - Manage Books",
+      "description": "Owners can add, read, update, and remove inventory books. A unique ISBN is generated for each collection run.",
+      "item": [
+        {
+          "name": "Owner creates a demo book",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now().toString().slice(-10).padStart(10, \"0\");",
+                  "pm.collectionVariables.set(\"demoIsbn\", `978${suffix}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Owner creates a book\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const book = pm.response.json();",
+                  "pm.collectionVariables.set(\"createdBookId\", book.id);",
+                  "pm.test(\"Created book has all copies available\", function () {",
+                  "    pm.expect(book.isbn).to.eql(pm.collectionVariables.get(\"demoIsbn\"));",
+                  "    pm.expect(book.totalCopies).to.eql(2);",
+                  "    pm.expect(book.availableCopies).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"{{demoIsbn}}\",\n  \"title\": \"Postman Demo Book\",\n  \"author\": \"Postman Runner\",\n  \"description\": \"Created automatically by the Postman collection.\",\n  \"totalCopies\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get the created book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{createdBookId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Client can read the owner-created book\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"createdBookId\")));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner updates the created book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"{{demoIsbn}}\",\n  \"title\": \"Postman Demo Book - Updated\",\n  \"author\": \"Postman Runner\",\n  \"description\": \"Updated through the owner inventory endpoint.\",\n  \"totalCopies\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{createdBookId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Owner updates the book\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const book = pm.response.json();",
+                  "    pm.expect(book.title).to.eql(\"Postman Demo Book - Updated\");",
+                  "    pm.expect(book.totalCopies).to.eql(3);",
+                  "    pm.expect(book.availableCopies).to.eql(3);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner removes the created book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{createdBookId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Owner removes a book without an active loan\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Removed book is no longer visible",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{createdBookId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Soft-deleted book returns 404\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner removes the returned borrow-test book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{borrowBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{borrowBookId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Returned borrow-test book can be removed\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5 - Book History",
+      "description": "Tracks the borrower, borrowed time, due time, returned time, returned-late flag, and calculated loan status.",
+      "item": [
+        {
+          "name": "Client views the returned loan record",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "{{loanId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"History records borrower and return information\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const loan = pm.response.json();",
+                  "    pm.expect(loan.id).to.eql(Number(pm.collectionVariables.get(\"loanId\")));",
+                  "    pm.expect(loan.borrower.username).to.eql(pm.collectionVariables.get(\"clientUsername\"));",
+                  "    pm.expect(loan.borrowedAt).to.be.a(\"string\");",
+                  "    pm.expect(loan.returnedAt).to.be.a(\"string\");",
+                  "    pm.expect(loan.returnedLate).to.be.a(\"boolean\");",
+                  "    pm.expect(loan.status).to.match(/^RETURNED_/);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner views the returned loan record",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "{{loanId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Owner can inspect the complete returned loan record\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const loan = pm.response.json();",
+                  "    pm.expect(loan.id).to.eql(Number(pm.collectionVariables.get(\"loanId\")));",
+                  "    pm.expect(loan.borrower.username).to.eql(pm.collectionVariables.get(\"clientUsername\"));",
+                  "    pm.expect(loan.borrowedAt).to.be.a(\"string\");",
+                  "    pm.expect(loan.returnedAt).to.be.a(\"string\");",
+                  "    pm.expect(loan.returnedLate).to.be.a(\"boolean\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Client views personal history",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/my?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "my"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Client history contains their returned loan\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const loanId = Number(pm.collectionVariables.get(\"loanId\"));",
+                  "    const loan = pm.response.json().content.find(item => item.id === loanId);",
+                  "    pm.expect(loan).to.be.an(\"object\");",
+                  "    pm.expect(loan.borrower.username).to.eql(pm.collectionVariables.get(\"clientUsername\"));",
+                  "    pm.expect(loan.returnedAt).to.be.a(\"string\");",
+                  "    pm.expect(loan.returnedLate).to.be.a(\"boolean\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner views complete history",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/history?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Owner history contains the returned loan\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const loanId = Number(pm.collectionVariables.get(\"loanId\"));",
+                  "    const loan = pm.response.json().content.find(item => item.id === loanId);",
+                  "    pm.expect(loan).to.be.an(\"object\");",
+                  "    pm.expect(loan.borrowedAt).to.be.a(\"string\");",
+                  "    pm.expect(loan.returnedAt).to.be.a(\"string\");",
+                  "    pm.expect(loan.returnedLate).to.be.a(\"boolean\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6 - Authentication",
+      "description": "Distinguishes anonymous, client, and owner permissions.",
+      "item": [
+        {
+          "name": "Anonymous request is rejected",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            },
+            "description": "Calls a protected endpoint without credentials. Expected result: 401 Unauthorized."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Anonymous request returns 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authenticated client can access client endpoints",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Client receives the inventory\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.be.an(\"array\");",
+                  "    pm.expect(body.page.totalElements).to.be.at.least(3);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authenticated owner can access shared endpoints",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Owner receives the inventory\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().content).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Client cannot create a book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"{{demoIsbn}}\",\n  \"title\": \"Forbidden Book\",\n  \"author\": \"Demo Client\",\n  \"totalCopies\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Client management request is forbidden\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Client cannot view complete history",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/history?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Complete history is owner-only\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner cannot borrow books",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookId\": {{seedBookId}},\n  \"loanDays\": 14\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Borrowing is client-only\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

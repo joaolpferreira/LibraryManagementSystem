@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: library-management-system
+  datasource:
+    url: jdbc:h2:mem:library;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+
+server:
+  error:
+    include-message: never
+    include-stacktrace: never

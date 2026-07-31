@@ -1,0 +1,561 @@
+{
+  "info": {
+    "_postman_id": "de8890f3-38bb-41d4-9e44-c34883c04090",
+    "name": "Library Management System - Simple",
+    "description": "Minimal collection with each REST endpoint exactly once, organized by the six core functionalities. Run folders 1 through 5 in order. Authentication has no dedicated endpoint: HTTP Basic credentials are attached to each request according to the required role.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "clientUsername",
+      "value": "client",
+      "type": "string"
+    },
+    {
+      "key": "clientPassword",
+      "value": "client123",
+      "type": "string"
+    },
+    {
+      "key": "ownerUsername",
+      "value": "owner",
+      "type": "string"
+    },
+    {
+      "key": "ownerPassword",
+      "value": "owner123",
+      "type": "string"
+    },
+    {
+      "key": "bookId",
+      "value": "2",
+      "type": "string"
+    },
+    {
+      "key": "loanId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "createdBookId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "demoIsbn",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1 - View Books",
+      "description": "Both roles can view and search the active inventory.",
+      "item": [
+        {
+          "name": "List and Search Books",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books?query=clean&availableOnly=false&page=0&size=20&sort=title,asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "clean",
+                  "description": "Leave empty to list all books."
+                },
+                {
+                  "key": "availableOnly",
+                  "value": "false"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "sort",
+                  "value": "title,asc"
+                }
+              ]
+            },
+            "description": "GET /api/books - Paginated search by title, author, or ISBN."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Book by ID",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{bookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{bookId}}"
+              ]
+            },
+            "description": "GET /api/books/{id}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2 - Borrow Book",
+      "description": "A client borrows an available book. The response ID is stored as loanId.",
+      "item": [
+        {
+          "name": "Borrow Book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookId\": {{bookId}},\n  \"loanDays\": 14\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans"
+              ]
+            },
+            "description": "POST /api/loans - Requires the CLIENT role."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"loanId\", pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 - Return Book",
+      "description": "The client returns the loan stored in loanId.",
+      "item": [
+        {
+          "name": "Return Book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/return",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "{{loanId}}",
+                "return"
+              ]
+            },
+            "description": "POST /api/loans/{loanId}/return - Requires the CLIENT role and ownership of the loan."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4 - Manage Books",
+      "description": "Owner-only inventory operations.",
+      "item": [
+        {
+          "name": "Add Book",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now().toString().slice(-10).padStart(10, \"0\");",
+                  "pm.collectionVariables.set(\"demoIsbn\", \"978\" + suffix);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"createdBookId\", pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"{{demoIsbn}}\",\n  \"title\": \"Simple Postman Book\",\n  \"author\": \"Postman\",\n  \"description\": \"Created by the simple collection.\",\n  \"totalCopies\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            },
+            "description": "POST /api/books - Requires the OWNER role."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"{{demoIsbn}}\",\n  \"title\": \"Simple Postman Book - Updated\",\n  \"author\": \"Postman\",\n  \"description\": \"Updated by the simple collection.\",\n  \"totalCopies\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{createdBookId}}"
+              ]
+            },
+            "description": "PUT /api/books/{id} - Requires the OWNER role."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{createdBookId}}"
+              ]
+            },
+            "description": "DELETE /api/books/{id} - Soft-deletes a book with no active loans."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5 - Book History",
+      "description": "Loan record, personal client history, and complete owner history.",
+      "item": [
+        {
+          "name": "Get Loan by ID",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "{{loanId}}"
+              ]
+            },
+            "description": "GET /api/loans/{id} - Available to the owning client or an owner."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Loan History",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{clientUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clientPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/my?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "my"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "GET /api/loans/my - Requires the CLIENT role."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Complete Loan History",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{ownerUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{ownerPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/history?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "GET /api/loans/history - Requires the OWNER role."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6 - Authentication",
+      "description": "There is no separate login endpoint. The API uses HTTP Basic authentication on every protected request. View/Borrow/Return/My History use client credentials; Manage/Complete History use owner credentials.",
+      "item": []
+    }
+  ]
+}
