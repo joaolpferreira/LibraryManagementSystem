@@ -27,6 +27,10 @@ tags:
     description: View client-specific or complete loan history.
   - name: Authentication
     description: All operations require an authenticated CLIENT or OWNER as documented.
+  - name: Late Fees
+    description: Automatic overdue-fee registration, visibility, and owner settlement.
+  - name: Reservations
+    description: FIFO waiting queues, time-limited copy allocation, and reservation history.
 paths:
   /api/books:
     get:
@@ -298,6 +302,266 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/late-fees:
+    get:
+      tags: [Late Fees]
+      operationId: getAllLateFees
+      summary: Get all registered late fees
+      description: Requires the OWNER role. Omit `status` to include every lifecycle state.
+      parameters:
+        - $ref: '#/components/parameters/LateFeeStatusFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Page containing late fees for all clients.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LateFeePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/late-fees/my:
+    get:
+      tags: [Late Fees]
+      operationId: getMyLateFees
+      summary: Get the authenticated client's late fees
+      parameters:
+        - $ref: '#/components/parameters/LateFeeStatusFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Page containing only this client's late fees.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LateFeePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/late-fees/{feeId}:
+    parameters:
+      - $ref: '#/components/parameters/LateFeeId'
+    get:
+      tags: [Late Fees]
+      operationId: getLateFee
+      summary: Get one registered late fee
+      description: Owners can view any fee; clients can view only their own fees.
+      responses:
+        '200':
+          description: Late fee found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LateFeeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/late-fees/{feeId}/settlement:
+    parameters:
+      - $ref: '#/components/parameters/LateFeeId'
+    post:
+      tags: [Late Fees]
+      operationId: settleLateFee
+      summary: Record a late fee as paid or waived
+      description: |
+        Requires the OWNER role. This records an external payment or an approved
+        waiver; it does not process a card or bank payment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LateFeeSettlementRequest'
+            examples:
+              paid:
+                value:
+                  action: PAID
+                  note: Receipt 42
+              waived:
+                value:
+                  action: WAIVED
+                  note: Courtesy waiver approved by owner
+      responses:
+        '200':
+          description: Updated late-fee lifecycle state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LateFeeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/reservations:
+    post:
+      tags: [Reservations]
+      operationId: reserveBook
+      summary: Join a book's FIFO waiting queue
+      description: |
+        Requires the CLIENT role. Reservations are accepted when no unallocated
+        copy can be borrowed. A client cannot reserve a book they currently have
+        on loan or already have an active reservation for.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReserveBookRequest'
+            example:
+              bookId: 2
+      responses:
+        '201':
+          description: Waiting reservation created in FIFO order.
+          headers:
+            Location:
+              description: Absolute URL of the created reservation.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [Reservations]
+      operationId: getAllReservations
+      summary: Get all reservation history
+      description: Requires the OWNER role. Omit `status` to include all lifecycle states.
+      parameters:
+        - $ref: '#/components/parameters/ReservationStatusFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Page containing reservations for every client and book.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/reservations/my:
+    get:
+      tags: [Reservations]
+      operationId: getMyReservations
+      summary: Get the authenticated client's reservation history
+      parameters:
+        - $ref: '#/components/parameters/ReservationStatusFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Page containing only this client's reservations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/reservations/books/{bookId}/queue:
+    parameters:
+      - $ref: '#/components/parameters/ReservationBookId'
+    get:
+      tags: [Reservations]
+      operationId: getBookReservationQueue
+      summary: Inspect a book's active FIFO queue
+      description: Requires the OWNER role. Returns `READY` and `WAITING` reservations in queue order.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Active queue ordered by original queue time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/reservations/{reservationId}:
+    parameters:
+      - $ref: '#/components/parameters/ReservationId'
+    get:
+      tags: [Reservations]
+      operationId: getReservation
+      summary: Get one reservation
+      description: Owners can view any reservation; clients can view only their own.
+      responses:
+        '200':
+          description: Reservation found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/reservations/{reservationId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ReservationId'
+    post:
+      tags: [Reservations]
+      operationId: cancelReservation
+      summary: Cancel the authenticated client's active reservation
+      description: A `WAITING` or `READY` reservation can be cancelled; terminal states cannot.
+      responses:
+        '200':
+          description: Cancelled reservation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 components:
   securitySchemes:
     basicAuth:
@@ -324,6 +588,50 @@ components:
         format: int64
         minimum: 1
       example: 1
+    LateFeeId:
+      name: feeId
+      in: path
+      required: true
+      description: Late-fee identifier.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+    LateFeeStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Optional lifecycle-state filter.
+      schema:
+        $ref: '#/components/schemas/LateFeeStatus'
+    ReservationId:
+      name: reservationId
+      in: path
+      required: true
+      description: Reservation identifier.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+    ReservationBookId:
+      name: bookId
+      in: path
+      required: true
+      description: Book whose active queue should be inspected.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 2
+    ReservationStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Optional reservation lifecycle-state filter.
+      schema:
+        $ref: '#/components/schemas/ReservationStatus'
     Page:
       name: page
       in: query
@@ -567,6 +875,169 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LoanResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    LateFeeStatus:
+      type: string
+      enum: [OUTSTANDING, PAID, WAIVED]
+      example: OUTSTANDING
+    LateFeeSettlementAction:
+      type: string
+      enum: [PAID, WAIVED]
+      example: PAID
+    LateFeeSettlementRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          $ref: '#/components/schemas/LateFeeSettlementAction'
+        note:
+          type: string
+          nullable: true
+          maxLength: 500
+          example: Receipt 42
+    LateFeeResponse:
+      type: object
+      required:
+        - id
+        - loanId
+        - book
+        - borrower
+        - daysLate
+        - dailyRate
+        - amount
+        - currency
+        - status
+        - registeredAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        loanId:
+          type: integer
+          format: int64
+          example: 42
+        book:
+          $ref: '#/components/schemas/BookSummary'
+        borrower:
+          $ref: '#/components/schemas/BorrowerSummary'
+        daysLate:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Number of started 24-hour overdue periods charged.
+          example: 3
+        dailyRate:
+          type: number
+          format: double
+          multipleOf: 0.01
+          example: 0.50
+        amount:
+          type: number
+          format: double
+          multipleOf: 0.01
+          description: Immutable `daysLate * dailyRate` registration snapshot.
+          example: 1.50
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: EUR
+        status:
+          $ref: '#/components/schemas/LateFeeStatus'
+        registeredAt:
+          type: string
+          format: date-time
+          example: '2026-08-18T12:00:00Z'
+        settledAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-08-19T09:30:00Z'
+        settlementNote:
+          type: string
+          nullable: true
+          maxLength: 500
+          example: Receipt 42
+    LateFeePage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/LateFeeResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    ReservationStatus:
+      type: string
+      enum: [WAITING, READY, FULFILLED, CANCELLED, EXPIRED]
+      example: WAITING
+    ReserveBookRequest:
+      type: object
+      additionalProperties: false
+      required: [bookId]
+      properties:
+        bookId:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 2
+    ReservationResponse:
+      type: object
+      required: [id, book, borrower, status, queuedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 7
+        book:
+          $ref: '#/components/schemas/BookSummary'
+        borrower:
+          $ref: '#/components/schemas/BorrowerSummary'
+        status:
+          $ref: '#/components/schemas/ReservationStatus'
+        queuePosition:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 1
+          description: Current FIFO position for `WAITING`; null for all other states.
+          example: 2
+        queuedAt:
+          type: string
+          format: date-time
+          example: '2026-08-01T12:00:00Z'
+        readyAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Deadline for a `READY` client to borrow the allocated copy.
+        fulfilledAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiredAt:
+          type: string
+          format: date-time
+          nullable: true
+    ReservationPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservationResponse'
         page:
           $ref: '#/components/schemas/PageMetadata'
     ProblemDetail:

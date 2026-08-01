@@ -3,11 +3,13 @@
 A Java 25 and Spring Boot REST API for managing a small library inventory,
 borrowing books, returning them, and preserving loan history.
 
-The project implements every required item in the exercise and two optional
+The project implements every required item in the exercise and four optional
 items:
 
 - PostgreSQL integration testing with Testcontainers
 - An application event emitted after a book return is committed
+- automatic, auditable late-fee registration and settlement
+- transactional FIFO reservation queues with expiring copy allocations
 
 See [ROADMAP.md](ROADMAP.md) for the implementation plan, design decisions, and
 suggested next phases.
@@ -23,6 +25,8 @@ suggested next phases.
 | Owner inventory management | Create, update, and soft-delete endpoints |
 | Borrowing history | Client-specific and owner-wide history endpoints |
 | Late tracking | Due date, return date, stored `returnedLate`, and calculated status |
+| Late-fee registration | Configurable calculation, immutable fee records, visibility, and settlement |
+| Reservation queue | FIFO waiting, ready holds, cancellation, expiry, and fair borrowing |
 | Java 25 and Maven | Compiler release 25 and Maven Wrapper |
 | Spring Data JPA | JPA entities and repositories |
 | REST APIs | Spring MVC controllers with validated DTOs |
@@ -38,6 +42,8 @@ suggested next phases.
 - **Soft deletion** hides removed books while preserving historical loan records
 - **RFC 9457 problem details** provide consistent API errors
 - **BCrypt** protects the seeded demo passwords
+- **Atomic late-fee registration** keeps returns and financial records consistent
+- **Reservation-aware borrowing** prevents clients bypassing allocated copies
 
 ## Open in IntelliJ IDEA
 
@@ -47,7 +53,7 @@ suggested next phases.
 4. Set the Project SDK to **Oracle JDK 25** if IntelliJ does not select it automatically.
 5. Run `LibraryManagementApplication`.
 
-The default profile uses an in-memory H2 database, applies both Flyway
+The default profile uses an in-memory H2 database, applies all Flyway
 migrations, and starts on `http://localhost:8080`.
 
 Demo accounts:
@@ -155,7 +161,7 @@ All endpoints require HTTP Basic authentication.
 The complete, importable API contract is available in [`openapi.yml`](openapi.yml).
 Open that file with the IntelliJ Swagger/OpenAPI preview, the VS Code Swagger
 Viewer extension, or import it into Swagger Editor. The contract documents all
-10 current operations, role requirements, query parameters, paging, request and
+20 current operations, role requirements, query parameters, paging, request and
 response schemas, and RFC 9457 error responses.
 
 | Method | Path | Role | Purpose |
@@ -170,6 +176,16 @@ response schemas, and RFC 9457 error responses.
 | `POST` | `/api/loans/{id}/return` | Owning client | Return a book |
 | `GET` | `/api/loans/my` | Client | View personal loan history |
 | `GET` | `/api/loans/history` | Owner | View all loan history |
+| `GET` | `/api/late-fees/my` | Client | View personal late fees |
+| `GET` | `/api/late-fees` | Owner | View and filter all late fees |
+| `GET` | `/api/late-fees/{feeId}` | Owner or owning client | Get one late fee |
+| `POST` | `/api/late-fees/{feeId}/settlement` | Owner | Record a fee as paid or waived |
+| `POST` | `/api/reservations` | Client | Join an unavailable book's FIFO queue |
+| `GET` | `/api/reservations/my` | Client | View personal reservation history |
+| `GET` | `/api/reservations` | Owner | View and filter all reservations |
+| `GET` | `/api/reservations/books/{bookId}/queue` | Owner | Inspect a book's active queue |
+| `GET` | `/api/reservations/{reservationId}` | Owner or owning client | Get one reservation |
+| `POST` | `/api/reservations/{reservationId}/cancel` | Owning client | Cancel an active reservation |
 
 Book search parameters:
 
@@ -178,6 +194,20 @@ Book search parameters:
 - `page`, `size`, and `sort`: standard Spring pagination parameters
 
 The page size is capped at 100.
+
+Late fees use the `library.late-fee.daily-rate` and
+`library.late-fee.currency` settings in `application.yml`. The default policy
+charges EUR 0.50 for every started 24-hour period after the exact due time. A
+late fee snapshots its calculation permanently, so later rate changes affect
+only future returns. Settlement records an external payment or owner-approved
+waiver; the API does not process card or bank payments.
+
+Reservations use a strict FIFO queue. When a copy becomes available, the oldest
+waiting reservation becomes `READY` and owns that copy for 48 hours by default.
+Other clients cannot borrow an allocated copy. Expired holds are reconciled by a
+scheduled job and also during queue-sensitive operations. Configure the hold and
+scan interval with `library.reservation.ready-hold` and
+`library.reservation.expiration-scan-delay`.
 
 ## Quick API walkthrough
 
@@ -213,6 +243,37 @@ curl.exe -u client:client123 `
   http://localhost:8080/api/loans/1/return
 ```
 
+View the client's outstanding late fees:
+
+```powershell
+curl.exe -u client:client123 `
+  "http://localhost:8080/api/late-fees/my?status=OUTSTANDING"
+```
+
+Record late fee `1` as paid:
+
+```powershell
+curl.exe -u owner:owner123 `
+  -H "Content-Type: application/json" `
+  -d '{"action":"PAID","note":"Receipt 42"}' `
+  http://localhost:8080/api/late-fees/1/settlement
+```
+
+Join the queue for unavailable book `2`:
+
+```powershell
+curl.exe -u client:client123 `
+  -H "Content-Type: application/json" `
+  -d '{"bookId":2}' `
+  http://localhost:8080/api/reservations
+```
+
+View personal reservations:
+
+```powershell
+curl.exe -u client:client123 http://localhost:8080/api/reservations/my
+```
+
 IntelliJ users can run the prepared requests in [requests.http](requests.http)
 directly from the editor.
 
@@ -222,6 +283,8 @@ directly from the editor.
 src/main/java/com/example/library
 |-- book/       inventory entity, repository, service, controller, DTOs
 |-- loan/       loan workflow, history, return event
+|-- fee/        late-fee policy, registration, queries, settlement, event
+|-- reservation/ FIFO queues, copy allocation, expiry job, controller, event
 |-- user/       database user and roles
 |-- config/     security, clock, stable page serialization
 `-- common/     problem-detail exception handling
@@ -242,3 +305,9 @@ src/main/resources
 - A book with active loans cannot be removed.
 - Removal is soft deletion so history remains readable.
 - Late status is decided using UTC when the return is recorded.
+- A late return atomically creates one immutable fee per loan.
+- Only owners can record a late fee as paid or waived.
+- Reservations are allowed only when no unallocated copy can be borrowed.
+- One client can hold only one active reservation for a given book.
+- Returned copies are allocated FIFO and cannot be taken by another client.
+- Ready allocations expire after the configured hold unless borrowed or cancelled.

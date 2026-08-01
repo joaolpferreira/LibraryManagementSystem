@@ -46,3 +46,46 @@ Authorization: Basic {{clientUsername}} {{clientPassword}}
 ### View all history as the owner
 GET {{baseUrl}}/api/loans/history
 Authorization: Basic {{ownerUsername}} {{ownerPassword}}
+
+### View the client's outstanding late fees
+GET {{baseUrl}}/api/late-fees/my?status=OUTSTANDING
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+
+### View all late fees as the owner
+GET {{baseUrl}}/api/late-fees
+Authorization: Basic {{ownerUsername}} {{ownerPassword}}
+
+### Record a late fee as paid (replace 1 with an existing fee ID)
+POST {{baseUrl}}/api/late-fees/1/settlement
+Authorization: Basic {{ownerUsername}} {{ownerPassword}}
+Content-Type: application/json
+
+{
+  "action": "PAID",
+  "note": "Receipt 42"
+}
+
+### Join the queue for an unavailable book
+POST {{baseUrl}}/api/reservations
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+
+{
+  "bookId": 2
+}
+
+> {%
+    client.global.set("reservationId", response.body.id);
+%}
+
+### View the client's reservation history
+GET {{baseUrl}}/api/reservations/my
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+
+### Inspect book 2's active FIFO queue as the owner
+GET {{baseUrl}}/api/reservations/books/2/queue
+Authorization: Basic {{ownerUsername}} {{ownerPassword}}
+
+### Cancel the reservation created above
+POST {{baseUrl}}/api/reservations/{{reservationId}}/cancel
+Authorization: Basic {{clientUsername}} {{clientPassword}}

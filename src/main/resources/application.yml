@@ -24,3 +24,11 @@ server:
   error:
     include-message: never
     include-stacktrace: never
+
+library:
+  late-fee:
+    daily-rate: 0.50
+    currency: EUR
+  reservation:
+    ready-hold: 48h
+    expiration-scan-delay: 1m

@@ -58,6 +58,8 @@ services and all required workflows are callable through REST.
 - JaCoCo HTML/XML reports with enforced 100% line and branch coverage
 - SonarQube Community Build analysis with a dedicated PostgreSQL container
 - validated OpenAPI contract for all REST operations
+- configurable late-fee policy with atomic registration and owner settlement
+- FIFO reservation queues with expiring, protected copy allocations
 - after-commit return event
 - Docker Compose PostgreSQL environment
 
@@ -81,12 +83,8 @@ without relying on demo credentials or in-memory infrastructure.
 
 ### Phase 4 - Optional library workflows
 
-1. **Reservation queue:** create a FIFO reservation per book, prevent duplicate
-   active reservations, and notify the next client after a return.
-2. **Late fees:** introduce a fee policy, immutable fee registration, payment
-   state, and owner reporting.
-3. **Renewals:** permit renewal only when no reservation is waiting.
-4. **Physical copies:** split `Book` metadata from individually tracked
+1. **Renewals:** permit renewal only when no reservation is waiting.
+2. **Physical copies:** split `Book` metadata from individually tracked
    `BookCopy` records when barcode-level inventory becomes necessary.
 
 Completion signal: queue position, fee calculations, and copy-level state are

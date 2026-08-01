@@ -3,11 +3,15 @@ package com.example.library.loan;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 
 import com.example.library.book.Book;
 import com.example.library.book.BookRepository;
 import com.example.library.common.ConflictException;
 import com.example.library.common.ResourceNotFoundException;
+import com.example.library.fee.LateFeeService;
+import com.example.library.reservation.BookReservation;
+import com.example.library.reservation.ReservationService;
 import com.example.library.user.LibraryUser;
 import com.example.library.user.LibraryUserRepository;
 import org.springframework.context.ApplicationEventPublisher;
@@ -24,6 +28,8 @@ public class LoanService {
     private final LoanRepository loanRepository;
     private final LibraryUserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final LateFeeService lateFeeService;
+    private final ReservationService reservationService;
     private final Clock clock;
 
     public LoanService(
@@ -31,12 +37,16 @@ public class LoanService {
             LoanRepository loanRepository,
             LibraryUserRepository userRepository,
             ApplicationEventPublisher eventPublisher,
+            LateFeeService lateFeeService,
+            ReservationService reservationService,
             Clock clock
     ) {
         this.bookRepository = bookRepository;
         this.loanRepository = loanRepository;
         this.userRepository = userRepository;
         this.eventPublisher = eventPublisher;
+        this.lateFeeService = lateFeeService;
+        this.reservationService = reservationService;
         this.clock = clock;
     }
 
@@ -51,14 +61,20 @@ public class LoanService {
                 book.getId(), borrower.getId())) {
             throw new ConflictException("You already have an active loan for this book");
         }
+        Instant borrowedAt = clock.instant();
+        Optional<BookReservation> reservation = reservationService.claimForBorrow(
+                book,
+                borrower,
+                borrowedAt
+        );
         try {
             book.borrowCopy();
         } catch (IllegalStateException exception) {
             throw new ConflictException(exception.getMessage());
         }
-        Instant borrowedAt = clock.instant();
         Instant dueAt = borrowedAt.plus(request.loanDays(), ChronoUnit.DAYS);
         Loan loan = loanRepository.save(new Loan(book, borrower, borrowedAt, dueAt));
+        reservation.ifPresent(value -> reservationService.fulfill(value, borrowedAt));
         return LoanResponse.from(loan, borrowedAt);
     }
 
@@ -78,6 +94,8 @@ public class LoanService {
         Instant returnedAt = clock.instant();
         loan.returnBook(returnedAt);
         book.returnCopy();
+        lateFeeService.registerIfLate(loan, returnedAt);
+        reservationService.onBookReturned(book, returnedAt);
 
         eventPublisher.publishEvent(new BookReturnedEvent(
                 loan.getId(),

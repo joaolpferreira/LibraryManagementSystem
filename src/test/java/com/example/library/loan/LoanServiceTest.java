@@ -10,6 +10,9 @@ import com.example.library.book.Book;
 import com.example.library.book.BookRepository;
 import com.example.library.common.ConflictException;
 import com.example.library.common.ResourceNotFoundException;
+import com.example.library.fee.LateFeeService;
+import com.example.library.reservation.BookReservation;
+import com.example.library.reservation.ReservationService;
 import com.example.library.user.LibraryUser;
 import com.example.library.user.LibraryUserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +47,10 @@ class LoanServiceTest {
     private LibraryUserRepository userRepository;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private LateFeeService lateFeeService;
+    @Mock
+    private ReservationService reservationService;
 
     private LoanService service;
     private LibraryUser borrower;
@@ -56,6 +63,8 @@ class LoanServiceTest {
                 loanRepository,
                 userRepository,
                 eventPublisher,
+                lateFeeService,
+                reservationService,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
         borrower = borrower("client", 7L);
@@ -64,9 +73,12 @@ class LoanServiceTest {
 
     @Test
     void borrowCreatesALoanWithTheRequestedDueDate() {
+        BookReservation reservation = org.mockito.Mockito.mock(BookReservation.class);
         when(userRepository.findByUsername("client")).thenReturn(Optional.of(borrower));
         when(bookRepository.findActiveByIdForUpdate(3L)).thenReturn(Optional.of(book));
         when(loanRepository.existsByBookIdAndBorrowerIdAndReturnedAtIsNull(3L, 7L)).thenReturn(false);
+        when(reservationService.claimForBorrow(book, borrower, NOW))
+                .thenReturn(Optional.of(reservation));
         when(loanRepository.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         LoanResponse response = service.borrow(new BorrowBookRequest(3L, 14), "client");
@@ -75,6 +87,7 @@ class LoanServiceTest {
         assertThat(response.dueAt()).isEqualTo(NOW.plusSeconds(14L * 24 * 60 * 60));
         assertThat(response.status()).isEqualTo(LoanStatus.ACTIVE);
         assertThat(book.getAvailableCopies()).isZero();
+        verify(reservationService).fulfill(reservation, NOW);
     }
 
     @Test
@@ -119,6 +132,8 @@ class LoanServiceTest {
 
         assertThat(response.status()).isEqualTo(LoanStatus.RETURNED_ON_TIME);
         assertThat(book.getAvailableCopies()).isEqualTo(1);
+        verify(lateFeeService).registerIfLate(loan, NOW);
+        verify(reservationService).onBookReturned(book, NOW);
         ArgumentCaptor<BookReturnedEvent> event = ArgumentCaptor.forClass(BookReturnedEvent.class);
         verify(eventPublisher).publishEvent(event.capture());
         assertThat(event.getValue().username()).isEqualTo("client");
