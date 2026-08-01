@@ -23,11 +23,15 @@ public interface BookRepository extends JpaRepository<Book, Long> {
                 or lower(book.author) like lower(concat('%', :query, '%'))
                 or lower(book.isbn) like lower(concat('%', :query, '%'))
               )
-              and (:availableOnly = false or book.availableCopies > 0)
+              and (
+                :availabilityFilter = -1
+                or (:availabilityFilter = 1 and book.availableCopies > 0)
+                or (:availabilityFilter = 0 and book.availableCopies = 0)
+              )
             """)
     Page<Book> search(
             @Param("query") String query,
-            @Param("availableOnly") boolean availableOnly,
+            @Param("availabilityFilter") int availabilityFilter,
             Pageable pageable
     );
 

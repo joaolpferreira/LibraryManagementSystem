@@ -34,7 +34,7 @@ public class BookController {
     @PreAuthorize("hasAnyRole('CLIENT', 'OWNER')")
     public Page<BookResponse> search(
             @RequestParam(required = false) String query,
-            @RequestParam(defaultValue = "false") boolean availableOnly,
+            @RequestParam(required = false) Boolean availableOnly,
             @PageableDefault(size = 20, sort = "title") Pageable pageable
     ) {
         return bookService.search(query, availableOnly, pageable);
@@ -70,4 +70,3 @@ public class BookController {
         return ResponseEntity.noContent().build();
     }
 }
-

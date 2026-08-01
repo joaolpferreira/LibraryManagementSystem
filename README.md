@@ -44,7 +44,7 @@ suggested next phases.
 1. In IntelliJ, choose **File > Open**.
 2. Select this `library-management-system` folder.
 3. Trust the project and let IntelliJ import `pom.xml`.
-4. Set the Project SDK to **Java 25** if IntelliJ does not select it automatically.
+4. Set the Project SDK to **Oracle JDK 25** if IntelliJ does not select it automatically.
 5. Run `LibraryManagementApplication`.
 
 The default profile uses an in-memory H2 database, applies both Flyway
@@ -129,7 +129,7 @@ All endpoints require HTTP Basic authentication.
 Book search parameters:
 
 - `query`: partial, case-insensitive title, author, or ISBN
-- `availableOnly`: `true` or `false`
+- `availableOnly`: omit it for all active books, use `true` for books with available copies, or `false` for books with zero available copies
 - `page`, `size`, and `sort`: standard Spring pagination parameters
 
 The page size is capped at 100.

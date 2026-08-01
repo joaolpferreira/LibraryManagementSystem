@@ -47,7 +47,13 @@ class PostgresContainerIntegrationTest {
 
         assertThat(books).isEqualTo(3);
         assertThat(migrations).isEqualTo(2);
-        assertThat(bookRepository.search("", true, PageRequest.of(0, 20)).getTotalElements())
+        jdbcTemplate.update("UPDATE books SET available_copies = 0 WHERE id = 2");
+
+        assertThat(bookRepository.search("", -1, PageRequest.of(0, 20)).getTotalElements())
                 .isEqualTo(3);
+        assertThat(bookRepository.search("", 1, PageRequest.of(0, 20)).getTotalElements())
+                .isEqualTo(2);
+        assertThat(bookRepository.search("", 0, PageRequest.of(0, 20)).getTotalElements())
+                .isEqualTo(1);
     }
 }

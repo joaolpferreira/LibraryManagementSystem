@@ -17,9 +17,10 @@ public class BookService {
     }
 
     @Transactional(readOnly = true)
-    public Page<BookResponse> search(String query, boolean availableOnly, Pageable pageable) {
+    public Page<BookResponse> search(String query, Boolean availableOnly, Pageable pageable) {
         String normalizedQuery = query == null || query.isBlank() ? "" : query.trim();
-        return bookRepository.search(normalizedQuery, availableOnly, pageable)
+        int availabilityFilter = availableOnly == null ? -1 : availableOnly ? 1 : 0;
+        return bookRepository.search(normalizedQuery, availabilityFilter, pageable)
                 .map(BookResponse::from);
     }
 

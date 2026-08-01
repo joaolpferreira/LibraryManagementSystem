@@ -78,7 +78,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/books?query=clean&availableOnly=false&page=0&size=20&sort=title,asc",
+              "raw": "{{baseUrl}}/api/books?query=clean&availableOnly=true&page=0&size=20&sort=title,asc",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -94,7 +94,7 @@
                 },
                 {
                   "key": "availableOnly",
-                  "value": "false"
+                  "value": "true"
                 },
                 {
                   "key": "page",

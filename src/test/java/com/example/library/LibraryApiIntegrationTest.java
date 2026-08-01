@@ -49,6 +49,39 @@ class LibraryApiIntegrationTest {
     }
 
     @Test
+    void availabilityParameterFiltersAvailableAndUnavailableBooks() throws Exception {
+        mockMvc.perform(post("/api/loans")
+                        .with(httpBasic("client", "client123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "bookId": 2,
+                                  "loanDays": 14
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/books")
+                        .with(httpBasic("client", "client123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(3));
+
+        mockMvc.perform(get("/api/books")
+                        .with(httpBasic("client", "client123"))
+                        .queryParam("availableOnly", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(2));
+
+        mockMvc.perform(get("/api/books")
+                        .with(httpBasic("client", "client123"))
+                        .queryParam("availableOnly", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(2))
+                .andExpect(jsonPath("$.content[0].available").value(false));
+    }
+
+    @Test
     void clientCannotManageInventory() throws Exception {
         mockMvc.perform(post("/api/books")
                         .with(httpBasic("client", "client123"))
