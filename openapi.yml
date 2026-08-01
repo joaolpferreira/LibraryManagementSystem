@@ -1,0 +1,602 @@
+openapi: 3.0.3
+info:
+  title: Library Management System API
+  version: 1.0.0
+  description: |
+    REST API for viewing and managing books and for borrowing, returning, and
+    auditing loans. Every operation uses HTTP Basic authentication.
+
+    Demo credentials:
+    * owner / owner123 (OWNER role)
+    * client / client123 (CLIENT role)
+servers:
+  - url: http://localhost:8080
+    description: Local Spring Boot server
+security:
+  - basicAuth: []
+tags:
+  - name: View Books
+    description: View, search, and filter the active catalogue (CLIENT or OWNER).
+  - name: Borrow Book
+    description: Borrow an available book (CLIENT only).
+  - name: Return Book
+    description: Return the authenticated client's own loan (CLIENT only).
+  - name: Manage Books
+    description: Add, update, and soft-delete catalogue entries (OWNER only).
+  - name: Book History
+    description: View client-specific or complete loan history.
+  - name: Authentication
+    description: All operations require an authenticated CLIENT or OWNER as documented.
+paths:
+  /api/books:
+    get:
+      tags: [View Books]
+      operationId: searchBooks
+      summary: Search and filter active books
+      description: |
+        With no `availableOnly` parameter, returns both available and unavailable
+        active books. `true` returns only books with at least one available copy;
+        `false` returns only books with zero available copies.
+      parameters:
+        - name: query
+          in: query
+          description: Case-insensitive partial match against title, author, or ISBN.
+          schema:
+            type: string
+          example: clean
+        - name: availableOnly
+          in: query
+          description: Tri-state availability filter; omit it to return both states.
+          schema:
+            type: boolean
+          examples:
+            available:
+              value: true
+            unavailable:
+              value: false
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/BookSort'
+      responses:
+        '200':
+          description: Page of matching active books.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Manage Books]
+      operationId: createBook
+      summary: Add a book
+      description: Requires the OWNER role. ISBN spaces and hyphens are removed before storage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookRequest'
+            example:
+              isbn: '9780321356680'
+              title: Effective Java
+              author: Joshua Bloch
+              description: Best practices for the Java platform.
+              totalCopies: 2
+      responses:
+        '201':
+          description: Book created. The Location header points to the new resource.
+          headers:
+            Location:
+              description: Absolute URL of the created book.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/books/{id}:
+    parameters:
+      - $ref: '#/components/parameters/BookId'
+    get:
+      tags: [View Books]
+      operationId: getBook
+      summary: Get one active book
+      responses:
+        '200':
+          description: Book found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Manage Books]
+      operationId: updateBook
+      summary: Replace a book's editable details
+      description: Requires the OWNER role. The total cannot be lower than copies currently on loan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookRequest'
+      responses:
+        '200':
+          description: Updated book.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [Manage Books]
+      operationId: removeBook
+      summary: Soft-delete a book
+      description: Requires the OWNER role. A book with an active loan cannot be removed.
+      responses:
+        '204':
+          description: Book deactivated successfully; no response body.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/loans:
+    post:
+      tags: [Borrow Book]
+      operationId: borrowBook
+      summary: Borrow an available copy
+      description: Requires the CLIENT role. A client cannot have two active loans for the same book.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BorrowBookRequest'
+            example:
+              bookId: 1
+              loanDays: 14
+      responses:
+        '201':
+          description: Loan created. The Location header points to the new loan.
+          headers:
+            Location:
+              description: Absolute URL of the created loan.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/loans/{loanId}:
+    parameters:
+      - $ref: '#/components/parameters/LoanId'
+    get:
+      tags: [Book History]
+      operationId: getLoan
+      summary: Get one loan
+      description: Owners can view any loan; clients can view only their own loans.
+      responses:
+        '200':
+          description: Loan found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/loans/{loanId}/return:
+    parameters:
+      - $ref: '#/components/parameters/LoanId'
+    post:
+      tags: [Return Book]
+      operationId: returnBook
+      summary: Return a client's own active loan
+      responses:
+        '200':
+          description: Returned loan, including whether it was late.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/loans/my:
+    get:
+      tags: [Book History]
+      operationId: getMyLoanHistory
+      summary: Get the authenticated client's loan history
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/LoanSort'
+      responses:
+        '200':
+          description: Page containing this client's active and returned loans.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/loans/history:
+    get:
+      tags: [Book History]
+      operationId: getAllLoanHistory
+      summary: Get complete loan history
+      description: Requires the OWNER role.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/LoanSort'
+      responses:
+        '200':
+          description: Page containing all clients' active and returned loans.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+  parameters:
+    BookId:
+      name: id
+      in: path
+      required: true
+      description: Book identifier.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+    LoanId:
+      name: loanId
+      in: path
+      required: true
+      description: Loan identifier.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+    Page:
+      name: page
+      in: query
+      description: Zero-based page index.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      description: Items per page; the application caps this value at 100.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    BookSort:
+      name: sort
+      in: query
+      description: Sort expression as `property,direction`; repeat for multiple fields.
+      schema:
+        type: array
+        items:
+          type: string
+        default: ['title,asc']
+      style: form
+      explode: true
+    LoanSort:
+      name: sort
+      in: query
+      description: Optional Spring Data sort expression as `property,direction`.
+      schema:
+        type: array
+        items:
+          type: string
+      style: form
+      explode: true
+  responses:
+    BadRequest:
+      description: Invalid request body, parameter, or pagination value.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unauthorized:
+      description: Missing or invalid HTTP Basic credentials.
+    Forbidden:
+      description: The authenticated role or client ownership does not permit the operation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: The requested active book, loan, or authenticated database user was not found.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Conflict:
+      description: The request conflicts with current inventory, loan, or unique-ISBN state.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+  schemas:
+    BookRequest:
+      type: object
+      additionalProperties: false
+      required: [isbn, title, author, totalCopies]
+      properties:
+        isbn:
+          type: string
+          maxLength: 20
+          pattern: '^(?:(?:[0-9][ -]?){9}[0-9Xx]|(?:[0-9][ -]?){12}[0-9])$'
+          example: '9780321356680'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Effective Java
+        author:
+          type: string
+          minLength: 1
+          maxLength: 150
+          example: Joshua Bloch
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+          example: Best practices for the Java platform.
+        totalCopies:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          example: 2
+    BookResponse:
+      type: object
+      required: [id, isbn, title, author, totalCopies, availableCopies, available]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        isbn:
+          type: string
+          example: '9780132350884'
+        title:
+          type: string
+          example: Clean Code
+        author:
+          type: string
+          example: Robert C. Martin
+        description:
+          type: string
+          nullable: true
+          example: A handbook of agile software craftsmanship.
+        totalCopies:
+          type: integer
+          format: int32
+          example: 2
+        availableCopies:
+          type: integer
+          format: int32
+          example: 1
+        available:
+          type: boolean
+          description: True when `availableCopies` is greater than zero.
+          example: true
+    BorrowBookRequest:
+      type: object
+      additionalProperties: false
+      required: [bookId, loanDays]
+      properties:
+        bookId:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 1
+        loanDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 60
+          example: 14
+    LoanResponse:
+      type: object
+      required: [id, book, borrower, borrowedAt, dueAt, returnedLate, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 42
+        book:
+          $ref: '#/components/schemas/BookSummary'
+        borrower:
+          $ref: '#/components/schemas/BorrowerSummary'
+        borrowedAt:
+          type: string
+          format: date-time
+          example: '2026-08-01T12:00:00Z'
+        dueAt:
+          type: string
+          format: date-time
+          example: '2026-08-15T12:00:00Z'
+        returnedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-08-10T09:30:00Z'
+        returnedLate:
+          type: boolean
+          example: false
+        status:
+          $ref: '#/components/schemas/LoanStatus'
+    BookSummary:
+      type: object
+      required: [id, isbn, title]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        isbn:
+          type: string
+          example: '9780132350884'
+        title:
+          type: string
+          example: Clean Code
+    BorrowerSummary:
+      type: object
+      required: [username, displayName]
+      properties:
+        username:
+          type: string
+          example: client
+        displayName:
+          type: string
+          example: Demo Client
+    LoanStatus:
+      type: string
+      enum: [ACTIVE, OVERDUE, RETURNED_ON_TIME, RETURNED_LATE]
+      example: ACTIVE
+    PageMetadata:
+      type: object
+      required: [size, number, totalElements, totalPages]
+      properties:
+        size:
+          type: integer
+          format: int32
+          example: 20
+        number:
+          type: integer
+          format: int32
+          description: Zero-based page index.
+          example: 0
+        totalElements:
+          type: integer
+          format: int64
+          example: 3
+        totalPages:
+          type: integer
+          format: int32
+          example: 1
+    BookPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    LoanPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoanResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    ProblemDetail:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          format: uri
+          default: about:blank
+        title:
+          type: string
+          example: Validation failed
+        status:
+          type: integer
+          format: int32
+          example: 400
+        detail:
+          type: string
+          example: One or more request fields are invalid
+        instance:
+          type: string
+          format: uri
+          example: /api/books
+        timestamp:
+          type: string
+          format: date-time
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            isbn: must be a valid ISBN-10 or ISBN-13
