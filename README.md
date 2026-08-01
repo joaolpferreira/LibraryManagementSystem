@@ -81,6 +81,45 @@ Run all tests:
 
 The Testcontainers test runs when Docker is available and is skipped otherwise.
 
+## Code coverage
+
+Run the tests and generate the JaCoCo HTML and XML reports:
+
+```powershell
+.\mvnw.cmd clean verify
+```
+
+Open `target/site/jacoco/index.html` to inspect coverage by package, class,
+method, and line. SonarQube automatically imports the XML report from
+`target/site/jacoco/jacoco.xml`. The Maven `verify` phase enforces 100% line and
+branch coverage, so a coverage regression fails the build.
+
+## SonarQube
+
+Start the local SonarQube Community Build and its dedicated PostgreSQL database:
+
+```powershell
+docker compose --profile sonar up -d sonar-db sonarqube
+```
+
+Open `http://localhost:9000`. On a new installation, sign in with `admin` / `admin`,
+change the initial password, and generate a user token under **My Account > Security**.
+
+Run tests, regenerate coverage, and submit the analysis:
+
+```powershell
+$env:SONAR_TOKEN = "your-token"
+.\mvnw.cmd clean verify sonar:sonar `
+  "-Dsonar.host.url=http://localhost:9000" `
+  "-Dsonar.token=$env:SONAR_TOKEN"
+```
+
+Stop SonarQube without deleting its persisted data:
+
+```powershell
+docker compose --profile sonar stop sonarqube sonar-db
+```
+
 ## Run with PostgreSQL
 
 Start PostgreSQL:
@@ -112,6 +151,12 @@ Add `-v` only if you intentionally want to delete the local database volume.
 ## API
 
 All endpoints require HTTP Basic authentication.
+
+The complete, importable API contract is available in [`openapi.yml`](openapi.yml).
+Open that file with the IntelliJ Swagger/OpenAPI preview, the VS Code Swagger
+Viewer extension, or import it into Swagger Editor. The contract documents all
+10 current operations, role requirements, query parameters, paging, request and
+response schemas, and RFC 9457 error responses.
 
 | Method | Path | Role | Purpose |
 |---|---|---|---|

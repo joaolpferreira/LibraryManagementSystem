@@ -55,11 +55,14 @@ services and all required workflows are callable through REST.
 - unit tests for inventory invariants
 - H2-backed end-to-end API and authorization tests
 - PostgreSQL Testcontainers migration test
+- JaCoCo HTML/XML reports with enforced 100% line and branch coverage
+- SonarQube Community Build analysis with a dedicated PostgreSQL container
+- validated OpenAPI contract for all REST operations
 - after-commit return event
 - Docker Compose PostgreSQL environment
 
-Completion signal: `mvn test` succeeds; PostgreSQL verification runs whenever
-Docker is available.
+Completion signal: `mvn verify` succeeds, PostgreSQL verification runs whenever
+Docker is available, and the SonarQube quality gate passes.
 
 ### Phase 3 - Production hardening (recommended next)
 
@@ -71,7 +74,7 @@ Docker is available.
 5. Add actuator health, metrics, tracing, and structured logs.
 6. Add rate limiting, production secrets management, and TLS termination.
 7. Add concurrency and load tests for the last-copy borrowing scenario.
-8. Publish an OpenAPI contract and generate a client SDK.
+8. Generate and publish a client SDK from the existing OpenAPI contract.
 
 Completion signal: the service can be deployed securely, observed, and operated
 without relying on demo credentials or in-memory infrastructure.
@@ -136,4 +139,3 @@ foreign key remains valid.
 4. `BookController` and `LoanController` for the REST contract.
 5. `LibraryApiIntegrationTest` for executable behavior examples.
 6. `PostgresContainerIntegrationTest` for database portability.
-
