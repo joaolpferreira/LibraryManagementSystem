@@ -1,6 +1,24 @@
 spring:
   application:
     name: library-management-system
+  ai:
+    mcp:
+      server:
+        enabled: true
+        name: library-management-system
+        version: 1.0.0
+        protocol: STATELESS
+        type: SYNC
+        instructions: >-
+          Use these tools to search and manage the library. Respect CLIENT and OWNER
+          permissions, inspect availability before borrowing, and never invent IDs.
+        capabilities:
+          tool: true
+          resource: false
+          prompt: false
+          completion: false
+        annotation-scanner:
+          enabled: true
   datasource:
     url: jdbc:h2:mem:library;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     username: sa

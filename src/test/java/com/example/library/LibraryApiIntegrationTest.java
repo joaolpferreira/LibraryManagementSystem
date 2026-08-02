@@ -63,6 +63,116 @@ class LibraryApiIntegrationTest {
     }
 
     @Test
+    void mcpEndpointRequiresAuthenticationAndExposesRegisteredTools() throws Exception {
+        String listTools = """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 1,
+                  "method": "tools/list",
+                  "params": {}
+                }
+                """;
+
+        mockMvc.perform(post("/mcp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
+                        .content(listTools))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/mcp")
+                        .with(httpBasic("client", "client123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
+                        .content(listTools))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.tools.length()").value(17))
+                .andExpect(jsonPath("$.result.tools[?(@.name == 'library_search_books')]").exists())
+                .andExpect(jsonPath("$.result.tools[?(@.name == 'library_add_book')]").exists());
+    }
+
+    @Test
+    void mcpToolsUseTheAuthenticatedIdentityAndEnforceRoles() throws Exception {
+        String searchBooks = """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 2,
+                  "method": "tools/call",
+                  "params": {
+                    "name": "library_search_books",
+                    "arguments": {
+                      "query": "clean",
+                      "availableOnly": true,
+                      "page": 0,
+                      "size": 5
+                    }
+                  }
+                }
+                """;
+        String addBook = """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 3,
+                  "method": "tools/call",
+                  "params": {
+                    "name": "library_add_book",
+                    "arguments": {
+                      "isbn": "9780321356680",
+                      "title": "Effective Java",
+                      "author": "Joshua Bloch",
+                      "totalCopies": 1
+                    }
+                  }
+                }
+                """;
+        String borrowBook = """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 4,
+                  "method": "tools/call",
+                  "params": {
+                    "name": "library_borrow_book",
+                    "arguments": {
+                      "bookId": 1,
+                      "loanDays": 14
+                    }
+                  }
+                }
+                """;
+
+        mockMvc.perform(post("/mcp")
+                        .with(httpBasic("client", "client123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
+                        .content(searchBooks))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.isError").value(false))
+                .andExpect(jsonPath("$.result.structuredContent.content[0].title")
+                        .value("Clean Code"));
+
+        mockMvc.perform(post("/mcp")
+                        .with(httpBasic("client", "client123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
+                        .content(addBook))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.isError").value(true))
+                .andExpect(jsonPath("$.result.content[0].text").value(
+                        org.hamcrest.Matchers.containsString("Access Denied")
+                ));
+
+        mockMvc.perform(post("/mcp")
+                        .with(httpBasic("owner", "owner123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
+                        .content(borrowBook))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.isError").value(true))
+                .andExpect(jsonPath("$.result.content[0].text").value(
+                        org.hamcrest.Matchers.containsString("Access Denied")
+                ));
+    }
+
+    @Test
     void bothRolesCanSearchBooks() throws Exception {
         mockMvc.perform(get("/api/books")
                         .with(httpBasic("client", "client123"))

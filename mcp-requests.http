@@ -1,0 +1,98 @@
+@baseUrl = http://localhost:8080
+@clientUsername = client
+@clientPassword = client123
+@ownerUsername = owner
+@ownerPassword = owner123
+
+### List all MCP tools as a client
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list",
+  "params": {}
+}
+
+### Search books through MCP
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "library_search_books",
+    "arguments": {
+      "query": "clean",
+      "availableOnly": true,
+      "page": 0,
+      "size": 20
+    }
+  }
+}
+
+### Borrow a book through MCP as a client
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "library_borrow_book",
+    "arguments": {
+      "bookId": 1,
+      "loanDays": 14
+    }
+  }
+}
+
+### View complete loan history through MCP as the owner
+POST {{baseUrl}}/mcp
+Authorization: Basic {{ownerUsername}} {{ownerPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "library_get_loan_history",
+    "arguments": {
+      "page": 0,
+      "size": 20
+    }
+  }
+}
+
+### Authorization check: a client cannot add inventory
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tools/call",
+  "params": {
+    "name": "library_add_book",
+    "arguments": {
+      "isbn": "9780321356680",
+      "title": "Effective Java",
+      "author": "Joshua Bloch",
+      "totalCopies": 1
+    }
+  }
+}
