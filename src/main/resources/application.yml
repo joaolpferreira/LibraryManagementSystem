@@ -50,3 +50,9 @@ library:
   reservation:
     ready-hold: 48h
     expiration-scan-delay: 1m
+  metadata:
+    base-url: https://openlibrary.org
+    covers-base-url: https://covers.openlibrary.org
+    connect-timeout: 3s
+    read-timeout: 5s
+    user-agent: LibraryManagementSystem/1.0 (metadata enrichment)

@@ -20,6 +20,7 @@
     <properties>
         <java.version>25</java.version>
         <jacoco.version>0.8.15</jacoco.version>
+        <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
         <sonar-maven-plugin.version>5.7.0.6970</sonar-maven-plugin.version>
         <sonar.projectKey>library-management-system</sonar.projectKey>
         <sonar.projectName>Library Management System</sonar.projectName>
@@ -117,6 +118,31 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven-enforcer-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>enforce-build-runtime</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[25,26)</version>
+                                    <message>This project must be built with JDK 25.</message>
+                                </requireJavaVersion>
+                                <requireMavenVersion>
+                                    <version>[3.9,4.0)</version>
+                                    <message>Use the included Maven Wrapper.</message>
+                                </requireMavenVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

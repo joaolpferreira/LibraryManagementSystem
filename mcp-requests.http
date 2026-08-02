@@ -96,3 +96,59 @@ Accept: application/json, text/event-stream
     }
   }
 }
+
+### Natural-language search through MCP
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "method": "tools/call",
+  "params": {
+    "name": "library_natural_language_search",
+    "arguments": {
+      "question": "livros disponíveis por Martin Fowler",
+      "page": 0,
+      "size": 10
+    }
+  }
+}
+
+### Personalized recommendations through MCP
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "library_get_recommendations",
+    "arguments": {
+      "limit": 5
+    }
+  }
+}
+
+### Enrich a book through MCP as the owner
+POST {{baseUrl}}/mcp
+Authorization: Basic {{ownerUsername}} {{ownerPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "tools/call",
+  "params": {
+    "name": "library_enrich_book_metadata",
+    "arguments": {
+      "bookId": 1
+    }
+  }
+}

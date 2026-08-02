@@ -73,4 +73,16 @@ class McpInputValidatorTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("size must be between 1 and 100");
     }
+
+    @Test
+    void resolvesAndValidatesBoundedIntegers() {
+        assertThat(inputs.integerBetween(null, 5, 1, 20, "limit")).isEqualTo(5);
+        assertThat(inputs.integerBetween(20, 5, 1, 20, "limit")).isEqualTo(20);
+        assertThatThrownBy(() -> inputs.integerBetween(0, 5, 1, 20, "limit"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("limit must be between 1 and 20");
+        assertThatThrownBy(() -> inputs.integerBetween(21, 5, 1, 20, "limit"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("limit must be between 1 and 20");
+    }
 }

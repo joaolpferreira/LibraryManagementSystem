@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Library Management System API
-  version: 1.0.0
+  version: 1.2.0
   description: |
     REST API for viewing and managing books and for borrowing, returning, and
     auditing loans. Every operation uses HTTP Basic authentication.
@@ -31,6 +31,14 @@ tags:
     description: Automatic overdue-fee registration, visibility, and owner settlement.
   - name: Reservations
     description: FIFO waiting queues, time-limited copy allocation, and reservation history.
+  - name: Natural Language Search
+    description: Deterministic English and Portuguese catalog-intent interpretation.
+  - name: Recommendations
+    description: Explainable, personalized recommendations for authenticated clients.
+  - name: Metadata Enrichment
+    description: Persisted bibliographic metadata obtained by ISBN from Open Library.
+  - name: Chat Assistant
+    description: Read-only, role-aware conversational access to live library data.
 paths:
   /api/books:
     get:
@@ -44,7 +52,7 @@ paths:
       parameters:
         - name: query
           in: query
-          description: Case-insensitive partial match against title, author, or ISBN.
+          description: Case-insensitive partial match against title, author, ISBN, description, or enriched subject.
           schema:
             type: string
           example: clean
@@ -562,6 +570,151 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/search/books/natural:
+    get:
+      tags: [Natural Language Search]
+      operationId: naturalLanguageBookSearch
+      summary: Search the catalog with a natural-language question
+      description: |
+        Interprets common English and Portuguese availability expressions and
+        extracts catalog keywords without removing accents from searchable names.
+        The interpretation is returned with the results so clients and AI agents
+        can inspect exactly what was applied.
+      parameters:
+        - name: question
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 300
+          example: Find available books by Martin Fowler
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/BookSort'
+      responses:
+        '200':
+          description: Interpreted query and matching active books.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NaturalLanguageSearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/recommendations/my:
+    get:
+      tags: [Recommendations]
+      operationId: getMyRecommendations
+      summary: Recommend books to the authenticated client
+      description: |
+        Excludes previously borrowed books and ranks the remaining active catalog
+        using author affinity, enriched-subject overlap, loan popularity, and
+        current availability. Every item includes human-readable scoring reasons.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 5
+      responses:
+        '200':
+          description: Ranked recommendations. The array can be empty.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecommendationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/books/{bookId}/metadata:
+    parameters:
+      - $ref: '#/components/parameters/MetadataBookId'
+    get:
+      tags: [Metadata Enrichment]
+      operationId: getBookMetadata
+      summary: Get persisted enriched metadata for a book
+      responses:
+        '200':
+          description: Latest persisted metadata snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookMetadataResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/books/{bookId}/metadata/enrich:
+    parameters:
+      - $ref: '#/components/parameters/MetadataBookId'
+    post:
+      tags: [Metadata Enrichment]
+      operationId: enrichBookMetadata
+      summary: Fetch and persist metadata by the book's ISBN
+      description: |
+        Requires OWNER. Repeating the operation updates the same versioned record.
+        The remote lookup runs outside the database transaction; persistence locks
+        and rechecks the book ISBN, returning 409 if it changed during the lookup.
+      responses:
+        '200':
+          description: Newly created or refreshed metadata snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookMetadataResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+  /api/assistant/chat:
+    post:
+      tags: [Chat Assistant]
+      operationId: chatWithLibraryAssistant
+      summary: Ask a read-only question about live library data
+      description: |
+        Routes the message to catalog search, recommendations, loans,
+        reservations, late fees, or help. It performs no state-changing action;
+        mutations remain explicit REST or MCP commands.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantRequest'
+            example:
+              message: Recommend a book for me
+      responses:
+        '200':
+          description: Grounded role-aware assistant response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 components:
   securitySchemes:
     basicAuth:
@@ -625,6 +778,16 @@ components:
         format: int64
         minimum: 1
       example: 2
+    MetadataBookId:
+      name: bookId
+      in: path
+      required: true
+      description: Book whose persisted metadata is requested or refreshed.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
     ReservationStatusFilter:
       name: status
       in: query
@@ -693,6 +856,12 @@ components:
             $ref: '#/components/schemas/ProblemDetail'
     Conflict:
       description: The request conflicts with current inventory, loan, or unique-ISBN state.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    BadGateway:
+      description: The external metadata provider could not be reached or returned an error.
       content:
         application/problem+json:
           schema:
@@ -1040,6 +1209,160 @@ components:
             $ref: '#/components/schemas/ReservationResponse'
         page:
           $ref: '#/components/schemas/PageMetadata'
+    NaturalLanguageQuery:
+      type: object
+      required: [originalQuestion, catalogQuery]
+      properties:
+        originalQuestion:
+          type: string
+          example: Find available books by Martin Fowler
+        catalogQuery:
+          type: string
+          example: martin fowler
+        availableOnly:
+          type: boolean
+          nullable: true
+          description: True, false, or null when no availability intent was detected.
+          example: true
+    NaturalLanguageSearchResponse:
+      type: object
+      required: [interpretation, books, page]
+      properties:
+        interpretation:
+          $ref: '#/components/schemas/NaturalLanguageQuery'
+        books:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    RecommendationResponse:
+      type: object
+      required: [book, score, reasons]
+      properties:
+        book:
+          $ref: '#/components/schemas/BookResponse'
+        score:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Explainable relative ranking score; larger values rank first.
+          example: 12
+        reasons:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          example:
+            - Available now
+            - Matches an author from your borrowing history
+    BookMetadataResponse:
+      type: object
+      required: [bookId, isbn, title, subjects, source, enrichedAt]
+      properties:
+        bookId:
+          type: integer
+          format: int64
+          example: 1
+        isbn:
+          type: string
+          example: '9780132350884'
+        title:
+          type: string
+          example: Clean Code
+        publisher:
+          type: string
+          nullable: true
+          example: Prentice Hall
+        publishedYear:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 1000
+          maximum: 9999
+          example: 2008
+        subjects:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+          example: [Programming, Software design]
+        coverUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://covers.openlibrary.org/b/id/123-L.jpg?default=false
+        source:
+          type: string
+          example: OPEN_LIBRARY
+        sourceUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://openlibrary.org/works/OL1W
+        enrichedAt:
+          type: string
+          format: date-time
+    AssistantRequest:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+          example: Show my loans
+    AssistantIntent:
+      type: string
+      enum:
+        - HELP
+        - SEARCH_BOOKS
+        - RECOMMENDATIONS
+        - MY_LOANS
+        - MY_RESERVATIONS
+        - MY_LATE_FEES
+        - ROLE_RESTRICTED
+    AssistantResponse:
+      type: object
+      required:
+        - intent
+        - reply
+        - recommendations
+        - loans
+        - reservations
+        - lateFees
+        - suggestions
+      properties:
+        intent:
+          $ref: '#/components/schemas/AssistantIntent'
+        reply:
+          type: string
+        search:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/NaturalLanguageSearchResponse'
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecommendationResponse'
+        loans:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoanResponse'
+        reservations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservationResponse'
+        lateFees:
+          type: array
+          items:
+            $ref: '#/components/schemas/LateFeeResponse'
+        suggestions:
+          type: array
+          items:
+            type: string
     ProblemDetail:
       type: object
       required: [type, title, status, detail]
@@ -1061,7 +1384,7 @@ components:
         instance:
           type: string
           format: uri
-          example: /api/books
+          example: http://localhost:8080/api/books
         timestamp:
           type: string
           format: date-time

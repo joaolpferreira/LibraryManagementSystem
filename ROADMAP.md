@@ -19,11 +19,19 @@ flowchart LR
     A["HTTP Basic request"] --> B["Spring Security"]
     B --> C["REST controller + DTO validation"]
     B --> J["MCP tool + schema validation"]
+    B --> K["Natural language + chat"]
     C --> D["Transactional service"]
     J --> D
+    K --> D
     D --> E["JPA repositories"]
     E --> F["H2 or PostgreSQL"]
     G["Flyway migrations"] --> F
+    D --> L["Recommendations"]
+    L --> E
+    C --> N["Metadata orchestration"]
+    N --> M["Open Library (no DB transaction)"]
+    N --> P["Short locked persistence transaction"]
+    P --> E
     D --> H["BookReturnedEvent"]
     H --> I["After-commit listener"]
 ```
@@ -64,7 +72,10 @@ services and all required workflows are callable through REST.
 - FIFO reservation queues with expiring, protected copy allocations
 - after-commit return event
 - Docker Compose PostgreSQL environment
-- authenticated Spring AI MCP server with 17 permission-checked tools
+- authenticated Spring AI MCP server with 21 permission-checked tools
+- natural-language catalog search and a grounded, read-only assistant API
+- explainable recommendation ranking with cold-start behavior
+- persisted, versioned Open Library metadata enrichment
 
 Completion signal: `mvn verify` succeeds, PostgreSQL verification runs whenever
 Docker is available, and the SonarQube quality gate passes.
@@ -95,13 +106,18 @@ deterministic and covered by integration tests.
 
 ### Phase 5 - Search and AI extensions
 
-1. Enrich book metadata from a trusted ISBN provider asynchronously.
-2. Add PostgreSQL full-text search or a dedicated search engine.
-3. Add recommendations based on anonymized borrowing signals.
-4. **Implemented:** expose carefully scoped read and command tools through an MCP server.
-5. Build natural-language search on top of the explicit, permission-checked tools.
-6. Add a chat assistant API only after access control, audit, and prompt-injection
-   boundaries are defined.
+1. **Implemented:** expose carefully scoped read and command tools through a
+   stateless, authenticated MCP server.
+2. **Implemented:** parse English and Portuguese catalog questions into explicit
+   search text and a tri-state availability filter.
+3. **Implemented:** rank recommendations using only the authenticated client's
+   history, enriched subjects, aggregate popularity, and inventory availability.
+4. **Implemented:** enrich and persist supplemental metadata from the trusted
+   Open Library ISBN search API without overwriting owner-managed fields.
+5. **Implemented:** expose a read-only, role-aware chat assistant that returns
+   structured, database-grounded results and keeps mutations explicit.
+6. **Future hardening:** move provider refreshes to an outbox-backed asynchronous
+   worker and add PostgreSQL full-text/vector search when catalog size justifies it.
 
 Completion signal: AI-facing capabilities reuse the same service-layer
 authorization and cannot bypass business rules.
@@ -109,11 +125,17 @@ authorization and cannot bypass business rules.
 ## 4. Data model
 
 ```text
-LibraryUser 1 ----- * Loan * ----- 1 Book
+LibraryUser 1 ----- * Loan             * ----- 1 Book
+LibraryUser 1 ----- * BookReservation  * ----- 1 Book
+Loan        1 ----- 0..1 LateFee
+Book        1 ----- 0..1 BookMetadata
 
 LibraryUser: username, password hash, display name, role, enabled
 Book: ISBN, metadata, total copies, available copies, active, version
 Loan: borrower, book, borrowed at, due at, returned at, returned late
+BookReservation: client, book, FIFO time, status, ready expiry
+LateFee: immutable calculation snapshot plus settlement audit fields
+BookMetadata: publisher, year, subjects, cover/source URLs, enriched timestamp
 ```
 
 The loan row is the historical record. Returning a book updates that row instead
@@ -131,6 +153,11 @@ foreign key remains valid.
 | Client accesses another client's loan | Ownership check in the service |
 | Schema drifts from entities | Flyway migrations plus Hibernate validation |
 | Event is emitted for rolled-back return | After-commit transactional listener |
+| External metadata corrupts catalog truth | Values are bounded and stored in a supplemental versioned table; core fields are never overwritten |
+| Slow metadata provider holds database resources | Remote lookup runs before the short persistence transaction and has strict timeouts |
+| ISBN changes during metadata lookup | Pessimistic lock plus ISBN recheck rejects the stale refresh with `409 Conflict` |
+| Assistant invents or mutates data | Deterministic intent routing, structured live data, read-only chat boundary |
+| Recommendation leaks another user | Username always comes from the authenticated security context |
 
 ## 6. Suggested review order
 

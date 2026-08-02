@@ -61,6 +61,15 @@ public class ApiExceptionHandler {
         );
     }
 
+    @ExceptionHandler(ExternalServiceException.class)
+    ProblemDetail handleExternalService(ExternalServiceException exception) {
+        return problem(
+                HttpStatus.BAD_GATEWAY,
+                "External metadata provider unavailable",
+                exception.getMessage()
+        );
+    }
+
     private static ProblemDetail problem(HttpStatus status, String title, String message) {
         ProblemDetail detail = ProblemDetail.forStatusAndDetail(status, message);
         detail.setTitle(title);

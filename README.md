@@ -3,7 +3,7 @@
 A Java 25 and Spring Boot REST API for managing a small library inventory,
 borrowing books, returning them, and preserving loan history.
 
-The project implements every required item in the exercise and five optional
+The project implements every required item in the exercise and all nine optional
 items:
 
 - PostgreSQL integration testing with Testcontainers
@@ -11,9 +11,14 @@ items:
 - automatic, auditable late-fee registration and settlement
 - transactional FIFO reservation queues with expiring copy allocations
 - a secured MCP server that exposes the business use cases to AI agents
+- English/Portuguese natural-language catalog search
+- explainable recommendations from borrowing and catalog signals
+- persisted ISBN metadata enrichment through Open Library
+- a read-only, role-aware chat assistant API grounded in live application data
 
-See [ROADMAP.md](ROADMAP.md) for the implementation plan, design decisions, and
-suggested next phases.
+See [REQUIREMENTS.md](REQUIREMENTS.md) for the requirement-to-code/test
+traceability matrix and [ROADMAP.md](ROADMAP.md) for the implementation plan,
+design decisions, and suggested next phases.
 
 ## Requirements covered
 
@@ -29,6 +34,10 @@ suggested next phases.
 | Late-fee registration | Configurable calculation, immutable fee records, visibility, and settlement |
 | Reservation queue | FIFO waiting, ready holds, cancellation, expiry, and fair borrowing |
 | AI-agent integration | Authenticated MCP tools over stateless Streamable HTTP |
+| Natural-language search | Transparent English/Portuguese intent parsing over the existing catalog query |
+| Recommendation system | Explainable ranking from history, subjects, popularity, and availability |
+| Metadata enrichment | Versioned Open Library snapshots persisted by ISBN |
+| Chat assistant API | Read-only role-aware intent routing to live services |
 | Java 25 and Maven | Compiler release 25 and Maven Wrapper |
 | Spring Data JPA | JPA entities and repositories |
 | REST APIs | Spring MVC controllers with validated DTOs |
@@ -37,6 +46,7 @@ suggested next phases.
 ## Technical choices
 
 - **Spring Boot 4.1.0** with Java 25
+- **Maven Enforcer** fails fast unless the wrapper is running on Java 25 and Maven 3.9
 - **H2** in PostgreSQL compatibility mode for zero-setup local development
 - **PostgreSQL 18** through Docker Compose for a production-like run
 - **Flyway** owns the schema; Hibernate runs with `ddl-auto: validate`
@@ -47,6 +57,8 @@ suggested next phases.
 - **Atomic late-fee registration** keeps returns and financial records consistent
 - **Reservation-aware borrowing** prevents clients bypassing allocated copies
 - **Spring AI MCP 2.0** exposes explicit, permission-checked tools at `/mcp`
+- **Open Library Search API** supplies optional ISBN metadata without an API key
+- **Grounded assistant orchestration** returns only database-backed results and performs no mutation
 
 ## Open in IntelliJ IDEA
 
@@ -166,13 +178,13 @@ tool has method-level role checks before it reaches the existing transactional
 services. An AI agent therefore cannot bypass loan, inventory, fee, reservation,
 ownership, or concurrency rules.
 
-The server publishes 17 tools:
+The server publishes 21 tools:
 
 | Access | Tools |
 |---|---|
-| Client or owner | `library_search_books`, `library_get_book` |
-| Client | `library_borrow_book`, `library_return_book`, `library_get_my_loans`, `library_reserve_book`, `library_get_my_reservations`, `library_cancel_reservation`, `library_get_my_late_fees` |
-| Owner | `library_add_book`, `library_update_book`, `library_remove_book`, `library_get_loan_history`, `library_get_reservation_history`, `library_get_book_queue`, `library_get_late_fee_history`, `library_settle_late_fee` |
+| Client or owner | `library_search_books`, `library_get_book`, `library_natural_language_search`, `library_get_book_metadata` |
+| Client | `library_borrow_book`, `library_return_book`, `library_get_my_loans`, `library_reserve_book`, `library_get_my_reservations`, `library_cancel_reservation`, `library_get_my_late_fees`, `library_get_recommendations` |
+| Owner | `library_add_book`, `library_update_book`, `library_remove_book`, `library_get_loan_history`, `library_get_reservation_history`, `library_get_book_queue`, `library_get_late_fee_history`, `library_settle_late_fee`, `library_enrich_book_metadata` |
 
 Tool parameters have generated JSON Schemas, paging is bounded to 100 results,
 mutating tools reuse validated request DTOs, and MCP annotations tell agents
@@ -232,8 +244,13 @@ All endpoints require HTTP Basic authentication.
 The complete, importable API contract is available in [`openapi.yml`](openapi.yml).
 Open that file with the IntelliJ Swagger/OpenAPI preview, the VS Code Swagger
 Viewer extension, or import it into Swagger Editor. The contract documents all
-20 current operations, role requirements, query parameters, paging, request and
+25 current operations, role requirements, query parameters, paging, request and
 response schemas, and RFC 9457 error responses.
+
+For Postman Desktop, import
+[`postman/Library_Management_System_All_Features.postman_collection.json`](postman/Library_Management_System_All_Features.postman_collection.json).
+It contains all REST operations, collection variables, authentication, example
+bodies, and folders matching the core and optional capabilities.
 
 | Method | Path | Role | Purpose |
 |---|---|---|---|
@@ -257,10 +274,42 @@ response schemas, and RFC 9457 error responses.
 | `GET` | `/api/reservations/books/{bookId}/queue` | Owner | Inspect a book's active queue |
 | `GET` | `/api/reservations/{reservationId}` | Owner or owning client | Get one reservation |
 | `POST` | `/api/reservations/{reservationId}/cancel` | Owning client | Cancel an active reservation |
+| `GET` | `/api/search/books/natural` | Client, Owner | Interpret and execute an English/Portuguese catalog question |
+| `GET` | `/api/recommendations/my` | Client | Get explainable personalized recommendations |
+| `GET` | `/api/books/{bookId}/metadata` | Client, Owner | Read persisted enriched metadata |
+| `POST` | `/api/books/{bookId}/metadata/enrich` | Owner | Refresh metadata from Open Library by ISBN |
+| `POST` | `/api/assistant/chat` | Client, Owner | Ask a read-only grounded library question |
+
+## Search, recommendations, metadata, and assistant
+
+Natural-language search is deliberately transparent: the response includes the
+catalog text and tri-state availability filter extracted from the question.
+Examples include `Find available books by Martin Fowler`, `livros indisponíveis`,
+and a plain title or ISBN.
+
+Recommendations never expose another client's history. Previously borrowed
+books are excluded, and each result explains the signals that contributed to
+its score. Enriched subjects improve personalization, but the system also has a
+cold-start ranking based on popularity and availability.
+
+Metadata enrichment is an explicit OWNER operation. It requests a small set of
+fields from Open Library by ISBN, caps subjects at 20, stores a versioned snapshot
+through Flyway-managed tables, and returns `502 Bad Gateway` if the provider is
+temporarily unavailable. Existing core title/author/inventory data is never
+overwritten by the external source. Provider values are normalized to database
+limits. The network request runs outside a database transaction; a short
+pessimistically locked transaction then rechecks the ISBN before persisting, so
+a concurrent owner edit cannot attach stale metadata to the wrong ISBN.
+
+The chat endpoint is usable without an LLM key. It recognizes help, catalog
+search, recommendations, loans, reservations, and late-fee questions in English
+or Portuguese, delegates to the same services as REST/MCP, and returns structured
+evidence. It is read-only by design; borrow, return, settlement, enrichment, and
+inventory changes remain explicit authenticated commands.
 
 Book search parameters:
 
-- `query`: partial, case-insensitive title, author, or ISBN
+- `query`: partial, case-insensitive title, author, ISBN, description, or enriched subject
 - `availableOnly`: omit it for all active books, use `true` for books with available copies, or `false` for books with zero available copies
 - `page`, `size`, and `sort`: standard Spring pagination parameters
 
@@ -357,6 +406,10 @@ src/main/java/com/example/library
 |-- fee/        late-fee policy, registration, queries, settlement, event
 |-- reservation/ FIFO queues, copy allocation, expiry job, controller, event
 |-- mcp/        secured AI-agent tools, input validation, paged responses
+|-- search/     transparent English/Portuguese natural-language catalog parsing
+|-- recommendation/ explainable, authenticated recommendation ranking
+|-- metadata/   Open Library adapter and concurrency-safe snapshot persistence
+|-- assistant/  deterministic, read-only chat intent orchestration
 |-- user/       database user and roles
 |-- config/     security, clock, stable page serialization
 `-- common/     problem-detail exception handling

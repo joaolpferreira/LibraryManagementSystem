@@ -40,6 +40,16 @@ class McpInputValidator {
         return value;
     }
 
+    int integerBetween(Integer value, int defaultValue, int minimum, int maximum, String name) {
+        int resolved = value == null ? defaultValue : value;
+        if (resolved < minimum || resolved > maximum) {
+            throw new IllegalArgumentException(
+                    name + " must be between " + minimum + " and " + maximum
+            );
+        }
+        return resolved;
+    }
+
     PageRequest page(Integer page, Integer size, Sort sort) {
         int resolvedPage = page == null ? 0 : page;
         int resolvedSize = size == null ? DEFAULT_PAGE_SIZE : size;

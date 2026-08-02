@@ -85,8 +85,11 @@ class LibraryApiIntegrationTest {
                         .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
                         .content(listTools))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.tools.length()").value(17))
+                .andExpect(jsonPath("$.result.tools.length()").value(21))
                 .andExpect(jsonPath("$.result.tools[?(@.name == 'library_search_books')]").exists())
+                .andExpect(jsonPath("$.result.tools[?(@.name == 'library_natural_language_search')]").exists())
+                .andExpect(jsonPath("$.result.tools[?(@.name == 'library_get_recommendations')]").exists())
+                .andExpect(jsonPath("$.result.tools[?(@.name == 'library_enrich_book_metadata')]").exists())
                 .andExpect(jsonPath("$.result.tools[?(@.name == 'library_add_book')]").exists());
     }
 
@@ -483,6 +486,92 @@ class LibraryApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(reservationRequest))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aiOptionalFeaturesUseLiveDataAndPreserveRoleBoundaries() throws Exception {
+        mockMvc.perform(get("/api/search/books/natural")
+                        .with(httpBasic("client", "client123"))
+                        .param("question", "Find available books by Martin Fowler"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interpretation.catalogQuery").value("martin fowler"))
+                .andExpect(jsonPath("$.interpretation.availableOnly").value(true))
+                .andExpect(jsonPath("$.books[0].title").value("Refactoring"));
+
+        mockMvc.perform(get("/api/search/books/natural")
+                        .with(httpBasic("client", "client123"))
+                        .param("question", " "))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/books")
+                        .with(httpBasic("client", "client123"))
+                        .param("query", "agile software"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].title").value("Clean Code"));
+
+        mockMvc.perform(get("/api/recommendations/my")
+                        .with(httpBasic("client", "client123"))
+                        .param("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].reasons[0]").value("Available now"));
+
+        mockMvc.perform(get("/api/recommendations/my")
+                        .with(httpBasic("owner", "owner123")))
+                .andExpect(status().isForbidden());
+
+        jdbcTemplate.update(
+                """
+                        INSERT INTO book_metadata (
+                            book_id, publisher, published_year, cover_url,
+                            source, source_url, enriched_at, version
+                        ) VALUES (1, 'Prentice Hall', 2008, NULL,
+                                  'OPEN_LIBRARY', 'https://openlibrary.org/works/OL1W', ?, 0)
+                        """,
+                Timestamp.from(TEST_NOW)
+        );
+        jdbcTemplate.update(
+                "INSERT INTO book_metadata_subjects (book_id, subject) VALUES (1, 'Programming')"
+        );
+        entityManager.clear();
+
+        mockMvc.perform(get("/api/books/1/metadata")
+                        .with(httpBasic("client", "client123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publisher").value("Prentice Hall"))
+                .andExpect(jsonPath("$.subjects[0]").value("Programming"));
+
+        mockMvc.perform(get("/api/search/books/natural")
+                        .with(httpBasic("client", "client123"))
+                        .param("question", "available books about Programming"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interpretation.catalogQuery").value("programming"))
+                .andExpect(jsonPath("$.books[0].title").value("Clean Code"));
+
+        mockMvc.perform(post("/api/books/1/metadata/enrich")
+                        .with(httpBasic("client", "client123")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/assistant/chat")
+                        .with(httpBasic("client", "client123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"Recommend a book for me\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("RECOMMENDATIONS"))
+                .andExpect(jsonPath("$.recommendations").isArray());
+
+        mockMvc.perform(post("/api/assistant/chat")
+                        .with(httpBasic("owner", "owner123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"Show my loans\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("ROLE_RESTRICTED"));
+
+        mockMvc.perform(post("/api/assistant/chat")
+                        .with(httpBasic("client", "client123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     private void createAdditionalClient(String username, String displayName) {

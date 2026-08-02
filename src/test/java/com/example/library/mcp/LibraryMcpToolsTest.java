@@ -13,10 +13,16 @@ import com.example.library.fee.LateFeeStatus;
 import com.example.library.loan.BorrowBookRequest;
 import com.example.library.loan.LoanResponse;
 import com.example.library.loan.LoanService;
+import com.example.library.metadata.BookMetadataService;
+import com.example.library.metadata.BookMetadataResponse;
+import com.example.library.recommendation.RecommendationResponse;
+import com.example.library.recommendation.RecommendationService;
 import com.example.library.reservation.ReservationResponse;
 import com.example.library.reservation.ReservationService;
 import com.example.library.reservation.ReservationStatus;
 import com.example.library.reservation.ReserveBookRequest;
+import com.example.library.search.NaturalLanguageSearchService;
+import com.example.library.search.NaturalLanguageSearchResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +33,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,6 +54,15 @@ class LibraryMcpToolsTest {
     private LateFeeService lateFeeService;
 
     @Mock
+    private NaturalLanguageSearchService naturalSearchService;
+
+    @Mock
+    private RecommendationService recommendationService;
+
+    @Mock
+    private BookMetadataService metadataService;
+
+    @Mock
     private McpAuthentication authentication;
 
     @Mock
@@ -62,6 +78,9 @@ class LibraryMcpToolsTest {
                 loanService,
                 reservationService,
                 lateFeeService,
+                naturalSearchService,
+                recommendationService,
+                metadataService,
                 authentication,
                 inputs
         );
@@ -182,5 +201,41 @@ class LibraryMcpToolsTest {
         assertThat(tools.settleLateFee(5L, LateFeeSettlementAction.PAID, "Receipt 42"))
                 .isSameAs(fee);
         verify(inputs).validate(request);
+    }
+
+    @Test
+    void delegatesNaturalSearchRecommendationsAndMetadataTools() {
+        NaturalLanguageSearchResponse search = org.mockito.Mockito.mock(
+                NaturalLanguageSearchResponse.class
+        );
+        RecommendationResponse recommendation = org.mockito.Mockito.mock(
+                RecommendationResponse.class
+        );
+        BookMetadataResponse metadata = org.mockito.Mockito.mock(BookMetadataResponse.class);
+        when(inputs.page(0, 10, Sort.by("title").ascending())).thenReturn(pageable);
+        when(naturalSearchService.search("available clean code", pageable)).thenReturn(search);
+        when(inputs.integerBetween(null, 5, 1, 20, "limit")).thenReturn(5);
+        when(authentication.username()).thenReturn("client");
+        when(recommendationService.recommend("client", 5))
+                .thenReturn(List.of(recommendation));
+        when(inputs.positiveId(3L, "bookId")).thenReturn(3L);
+        when(metadataService.get(3L)).thenReturn(metadata);
+        when(metadataService.enrich(3L)).thenReturn(metadata);
+
+        assertThat(tools.naturalLanguageSearch(" available clean code ", 0, 10))
+                .isSameAs(search);
+        assertThat(tools.recommendations(null)).containsExactly(recommendation);
+        assertThat(tools.getBookMetadata(3L)).isSameAs(metadata);
+        assertThat(tools.enrichBookMetadata(3L)).isSameAs(metadata);
+    }
+
+    @Test
+    void rejectsMissingBlankAndOversizedNaturalLanguageQuestions() {
+        assertThatThrownBy(() -> tools.naturalLanguageSearch(null, null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> tools.naturalLanguageSearch(" ", null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> tools.naturalLanguageSearch("x".repeat(301), null, null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

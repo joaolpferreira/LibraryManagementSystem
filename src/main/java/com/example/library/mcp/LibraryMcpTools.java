@@ -11,10 +11,17 @@ import com.example.library.fee.LateFeeStatus;
 import com.example.library.loan.BorrowBookRequest;
 import com.example.library.loan.LoanResponse;
 import com.example.library.loan.LoanService;
+import com.example.library.metadata.BookMetadataResponse;
+import com.example.library.metadata.BookMetadataService;
+import com.example.library.recommendation.RecommendationResponse;
+import com.example.library.recommendation.RecommendationService;
 import com.example.library.reservation.ReservationResponse;
 import com.example.library.reservation.ReservationService;
 import com.example.library.reservation.ReservationStatus;
 import com.example.library.reservation.ReserveBookRequest;
+import com.example.library.search.NaturalLanguageSearchResponse;
+import com.example.library.search.NaturalLanguageSearchService;
+import java.util.List;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.data.domain.Sort;
@@ -33,6 +40,9 @@ public class LibraryMcpTools {
     private final LoanService loanService;
     private final ReservationService reservationService;
     private final LateFeeService lateFeeService;
+    private final NaturalLanguageSearchService naturalSearchService;
+    private final RecommendationService recommendationService;
+    private final BookMetadataService metadataService;
     private final McpAuthentication authentication;
     private final McpInputValidator inputs;
 
@@ -41,6 +51,9 @@ public class LibraryMcpTools {
             LoanService loanService,
             ReservationService reservationService,
             LateFeeService lateFeeService,
+            NaturalLanguageSearchService naturalSearchService,
+            RecommendationService recommendationService,
+            BookMetadataService metadataService,
             McpAuthentication authentication,
             McpInputValidator inputs
     ) {
@@ -48,6 +61,9 @@ public class LibraryMcpTools {
         this.loanService = loanService;
         this.reservationService = reservationService;
         this.lateFeeService = lateFeeService;
+        this.naturalSearchService = naturalSearchService;
+        this.recommendationService = recommendationService;
+        this.metadataService = metadataService;
         this.authentication = authentication;
         this.inputs = inputs;
     }
@@ -66,7 +82,7 @@ public class LibraryMcpTools {
     )
     @PreAuthorize(ANY_LIBRARY_ROLE)
     public McpPage<BookResponse> searchBooks(
-            @McpToolParam(description = "Optional title, author, or ISBN search text", required = false)
+            @McpToolParam(description = "Optional title, author, ISBN, description, or subject search text", required = false)
             String query,
             @McpToolParam(description = "true for available books, false for unavailable books, omit for all", required = false)
             Boolean availableOnly,
@@ -96,6 +112,92 @@ public class LibraryMcpTools {
             @McpToolParam(description = "Positive library book ID", required = true) Long bookId
     ) {
         return bookService.get(inputs.positiveId(bookId, BOOK_ID));
+    }
+
+    @McpTool(
+            name = "library_natural_language_search",
+            description = "Interpret an English or Portuguese catalog question and search by its detected text and availability intent.",
+            generateOutputSchema = true,
+            annotations = @McpTool.McpAnnotations(
+                    title = "Search books with natural language",
+                    readOnlyHint = true,
+                    destructiveHint = false,
+                    idempotentHint = true,
+                    openWorldHint = false
+            )
+    )
+    @PreAuthorize(ANY_LIBRARY_ROLE)
+    public NaturalLanguageSearchResponse naturalLanguageSearch(
+            @McpToolParam(description = "Natural-language catalog question", required = true)
+            String question,
+            @McpToolParam(description = "Zero-based result page; defaults to 0", required = false)
+            Integer page,
+            @McpToolParam(description = "Page size from 1 to 100; defaults to 20", required = false)
+            Integer size
+    ) {
+        if (question == null || question.isBlank() || question.length() > 300) {
+            throw new IllegalArgumentException("question must contain between 1 and 300 characters");
+        }
+        var pageable = inputs.page(page, size, Sort.by("title").ascending());
+        return naturalSearchService.search(question.trim(), pageable);
+    }
+
+    @McpTool(
+            name = "library_get_recommendations",
+            description = "Get explainable recommendations for the authenticated client from borrowing history, metadata, popularity, and availability.",
+            generateOutputSchema = true,
+            annotations = @McpTool.McpAnnotations(
+                    title = "Recommend library books",
+                    readOnlyHint = true,
+                    destructiveHint = false,
+                    idempotentHint = true,
+                    openWorldHint = false
+            )
+    )
+    @PreAuthorize(CLIENT_ROLE)
+    public List<RecommendationResponse> recommendations(
+            @McpToolParam(description = "Number of recommendations from 1 to 20; defaults to 5", required = false)
+            Integer limit
+    ) {
+        int validLimit = inputs.integerBetween(limit, 5, 1, 20, "limit");
+        return recommendationService.recommend(authentication.username(), validLimit);
+    }
+
+    @McpTool(
+            name = "library_get_book_metadata",
+            description = "Get the latest persisted external metadata for an active book.",
+            generateOutputSchema = true,
+            annotations = @McpTool.McpAnnotations(
+                    title = "Get enriched book metadata",
+                    readOnlyHint = true,
+                    destructiveHint = false,
+                    idempotentHint = true,
+                    openWorldHint = false
+            )
+    )
+    @PreAuthorize(ANY_LIBRARY_ROLE)
+    public BookMetadataResponse getBookMetadata(
+            @McpToolParam(description = "Positive library book ID", required = true) Long bookId
+    ) {
+        return metadataService.get(inputs.positiveId(bookId, BOOK_ID));
+    }
+
+    @McpTool(
+            name = "library_enrich_book_metadata",
+            description = "Fetch trusted Open Library metadata by ISBN and persist it for an active book as the authenticated owner.",
+            generateOutputSchema = true,
+            annotations = @McpTool.McpAnnotations(
+                    title = "Enrich book metadata",
+                    destructiveHint = false,
+                    idempotentHint = false,
+                    openWorldHint = true
+            )
+    )
+    @PreAuthorize(OWNER_ROLE)
+    public BookMetadataResponse enrichBookMetadata(
+            @McpToolParam(description = "Positive library book ID", required = true) Long bookId
+    ) {
+        return metadataService.enrich(inputs.positiveId(bookId, BOOK_ID));
     }
 
     @McpTool(

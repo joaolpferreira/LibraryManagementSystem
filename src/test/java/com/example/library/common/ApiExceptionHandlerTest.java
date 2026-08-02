@@ -84,6 +84,20 @@ class ApiExceptionHandlerTest {
         );
     }
 
+    @Test
+    void externalProviderErrorsMapToBadGateway() {
+        ProblemDetail problem = handler.handleExternalService(
+                new ExternalServiceException("provider unavailable", new RuntimeException())
+        );
+
+        assertProblem(
+                problem,
+                HttpStatus.BAD_GATEWAY,
+                "External metadata provider unavailable",
+                "provider unavailable"
+        );
+    }
+
     private static void assertProblem(
             ProblemDetail problem,
             HttpStatus status,
