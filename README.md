@@ -3,13 +3,14 @@
 A Java 25 and Spring Boot REST API for managing a small library inventory,
 borrowing books, returning them, and preserving loan history.
 
-The project implements every required item in the exercise and four optional
+The project implements every required item in the exercise and five optional
 items:
 
 - PostgreSQL integration testing with Testcontainers
 - An application event emitted after a book return is committed
 - automatic, auditable late-fee registration and settlement
 - transactional FIFO reservation queues with expiring copy allocations
+- a secured MCP server that exposes the business use cases to AI agents
 
 See [ROADMAP.md](ROADMAP.md) for the implementation plan, design decisions, and
 suggested next phases.
@@ -27,6 +28,7 @@ suggested next phases.
 | Late tracking | Due date, return date, stored `returnedLate`, and calculated status |
 | Late-fee registration | Configurable calculation, immutable fee records, visibility, and settlement |
 | Reservation queue | FIFO waiting, ready holds, cancellation, expiry, and fair borrowing |
+| AI-agent integration | Authenticated MCP tools over stateless Streamable HTTP |
 | Java 25 and Maven | Compiler release 25 and Maven Wrapper |
 | Spring Data JPA | JPA entities and repositories |
 | REST APIs | Spring MVC controllers with validated DTOs |
@@ -44,6 +46,7 @@ suggested next phases.
 - **BCrypt** protects the seeded demo passwords
 - **Atomic late-fee registration** keeps returns and financial records consistent
 - **Reservation-aware borrowing** prevents clients bypassing allocated copies
+- **Spring AI MCP 2.0** exposes explicit, permission-checked tools at `/mcp`
 
 ## Open in IntelliJ IDEA
 
@@ -153,6 +156,74 @@ docker compose down
 ```
 
 Add `-v` only if you intentionally want to delete the local database volume.
+
+## MCP server for AI agents
+
+The same Spring Boot process exposes a Model Context Protocol server at
+`http://localhost:8080/mcp`. It uses stateless Streamable HTTP and Spring AI
+2.0.0. MCP requests use the same HTTP Basic users as the REST API, and every
+tool has method-level role checks before it reaches the existing transactional
+services. An AI agent therefore cannot bypass loan, inventory, fee, reservation,
+ownership, or concurrency rules.
+
+The server publishes 17 tools:
+
+| Access | Tools |
+|---|---|
+| Client or owner | `library_search_books`, `library_get_book` |
+| Client | `library_borrow_book`, `library_return_book`, `library_get_my_loans`, `library_reserve_book`, `library_get_my_reservations`, `library_cancel_reservation`, `library_get_my_late_fees` |
+| Owner | `library_add_book`, `library_update_book`, `library_remove_book`, `library_get_loan_history`, `library_get_reservation_history`, `library_get_book_queue`, `library_get_late_fee_history`, `library_settle_late_fee` |
+
+Tool parameters have generated JSON Schemas, paging is bounded to 100 results,
+mutating tools reuse validated request DTOs, and MCP annotations tell agents
+which tools are read-only or destructive. Client-specific tools obtain the
+username from the authenticated security context; they never accept an
+impersonation username from the model.
+
+Use the official MCP Inspector to view schemas and call tools interactively:
+
+```powershell
+npx -y @modelcontextprotocol/inspector
+```
+
+In the Inspector, select **Streamable HTTP**, enter
+`http://localhost:8080/mcp`, and add one of these request headers:
+
+```text
+Authorization: Basic Y2xpZW50OmNsaWVudDEyMw==
+Authorization: Basic b3duZXI6b3duZXIxMjM=
+```
+
+The first value authenticates `client / client123`; the second authenticates
+`owner / owner123`. Use only one identity per connection. The demo credentials
+must be replaced before any non-local deployment.
+
+List the tools directly from a terminal:
+
+```powershell
+npx -y @modelcontextprotocol/inspector --cli http://localhost:8080/mcp `
+  --transport http `
+  --method tools/list `
+  --header "Authorization: Basic Y2xpZW50OmNsaWVudDEyMw=="
+```
+
+Call the book-search tool:
+
+```powershell
+npx -y @modelcontextprotocol/inspector --cli http://localhost:8080/mcp `
+  --transport http `
+  --method tools/call `
+  --tool-name library_search_books `
+  --tool-arg query=clean `
+  --tool-arg availableOnly=true `
+  --tool-arg page=0 `
+  --tool-arg size=20 `
+  --header "Authorization: Basic Y2xpZW50OmNsaWVudDEyMw=="
+```
+
+`mcp-requests.http` contains equivalent JSON-RPC requests for IntelliJ. MCP is
+not added to `openapi.yml` because OpenAPI describes the REST API, while `/mcp`
+uses the MCP JSON-RPC protocol and advertises its own generated tool schemas.
 
 ## API
 
@@ -285,6 +356,7 @@ src/main/java/com/example/library
 |-- loan/       loan workflow, history, return event
 |-- fee/        late-fee policy, registration, queries, settlement, event
 |-- reservation/ FIFO queues, copy allocation, expiry job, controller, event
+|-- mcp/        secured AI-agent tools, input validation, paged responses
 |-- user/       database user and roles
 |-- config/     security, clock, stable page serialization
 `-- common/     problem-detail exception handling

@@ -18,7 +18,9 @@ large feature set. The implementation therefore keeps the first release small:
 flowchart LR
     A["HTTP Basic request"] --> B["Spring Security"]
     B --> C["REST controller + DTO validation"]
+    B --> J["MCP tool + schema validation"]
     C --> D["Transactional service"]
+    J --> D
     D --> E["JPA repositories"]
     E --> F["H2 or PostgreSQL"]
     G["Flyway migrations"] --> F
@@ -62,6 +64,7 @@ services and all required workflows are callable through REST.
 - FIFO reservation queues with expiring, protected copy allocations
 - after-commit return event
 - Docker Compose PostgreSQL environment
+- authenticated Spring AI MCP server with 17 permission-checked tools
 
 Completion signal: `mvn verify` succeeds, PostgreSQL verification runs whenever
 Docker is available, and the SonarQube quality gate passes.
@@ -95,8 +98,8 @@ deterministic and covered by integration tests.
 1. Enrich book metadata from a trusted ISBN provider asynchronously.
 2. Add PostgreSQL full-text search or a dedicated search engine.
 3. Add recommendations based on anonymized borrowing signals.
-4. Expose carefully scoped read and command tools through an MCP server.
-5. Build natural-language search on top of explicit, permission-checked tools.
+4. **Implemented:** expose carefully scoped read and command tools through an MCP server.
+5. Build natural-language search on top of the explicit, permission-checked tools.
 6. Add a chat assistant API only after access control, audit, and prompt-injection
    boundaries are defined.
 
