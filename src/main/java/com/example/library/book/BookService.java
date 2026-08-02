@@ -2,6 +2,7 @@ package com.example.library.book;
 
 import com.example.library.common.ConflictException;
 import com.example.library.common.ResourceNotFoundException;
+import com.example.library.reservation.ReservationService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -11,9 +12,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class BookService {
 
     private final BookRepository bookRepository;
+    private final ReservationService reservationService;
 
-    public BookService(BookRepository bookRepository) {
+    public BookService(BookRepository bookRepository, ReservationService reservationService) {
         this.bookRepository = bookRepository;
+        this.reservationService = reservationService;
     }
 
     @Transactional(readOnly = true)
@@ -53,6 +56,7 @@ public class BookService {
         if (bookRepository.existsByIsbnIgnoreCaseAndIdNot(isbn, id)) {
             throw new ConflictException("A book with ISBN " + isbn + " already exists");
         }
+        reservationService.prepareInventoryUpdate(book, request.totalCopies());
         try {
             book.update(
                     isbn,
@@ -64,6 +68,7 @@ public class BookService {
         } catch (IllegalArgumentException exception) {
             throw new ConflictException(exception.getMessage());
         }
+        reservationService.onInventoryUpdated(book);
         return BookResponse.from(book);
     }
 
@@ -71,6 +76,7 @@ public class BookService {
     public void remove(Long id) {
         Book book = bookRepository.findActiveByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Book " + id + " was not found"));
+        reservationService.assertNoActiveReservations(book);
         try {
             book.deactivate();
         } catch (IllegalStateException exception) {

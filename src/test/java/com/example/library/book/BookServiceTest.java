@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import com.example.library.common.ConflictException;
 import com.example.library.common.ResourceNotFoundException;
+import com.example.library.reservation.ReservationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,13 +26,15 @@ class BookServiceTest {
 
     @Mock
     private BookRepository bookRepository;
+    @Mock
+    private ReservationService reservationService;
 
     private BookService service;
     private Pageable pageable;
 
     @BeforeEach
     void setUp() {
-        service = new BookService(bookRepository);
+        service = new BookService(bookRepository, reservationService);
         pageable = PageRequest.of(0, 20);
     }
 
