@@ -10,7 +10,7 @@ public record BookRequest(
         @NotBlank
         @Size(max = 20)
         @Pattern(
-                regexp = "(?i)(?:[0-9][ -]?){9}[0-9X]|(?:[0-9][ -]?){12}[0-9]",
+                regexp = "(?i)(?:\\d[ -]?){9}[\\dX]|(?:\\d[ -]?){12}\\d",
                 message = "must be a valid ISBN-10 or ISBN-13"
         )
         String isbn,

@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 public class AssistantService {
 
     private static final int RESULT_LIMIT = 5;
+    private static final String RECOMMEND_BOOK_SUGGESTION = "Recommend a book for me";
+    private static final String SHOW_MY_LOANS_SUGGESTION = "Show my loans";
 
     private final AssistantIntentClassifier classifier;
     private final NaturalLanguageSearchService searchService;
@@ -72,8 +74,8 @@ public class AssistantService {
                 )
                 : List.of(
                         "Find available books by Martin Fowler",
-                        "Recommend a book for me",
-                        "Show my loans",
+                        RECOMMEND_BOOK_SUGGESTION,
+                        SHOW_MY_LOANS_SUGGESTION,
                         "Show my reservations",
                         "Show my late fees"
                 );
@@ -107,7 +109,7 @@ public class AssistantService {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of("Recommend a book for me", "Show only available books")
+                List.of(RECOMMEND_BOOK_SUGGESTION, "Show only available books")
         );
     }
 
@@ -125,7 +127,7 @@ public class AssistantService {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of("Show my loans", "Find available books")
+                List.of(SHOW_MY_LOANS_SUGGESTION, "Find available books")
         );
     }
 
@@ -142,7 +144,7 @@ public class AssistantService {
                 result,
                 List.of(),
                 List.of(),
-                List.of("Show my late fees", "Recommend a book for me")
+                List.of("Show my late fees", RECOMMEND_BOOK_SUGGESTION)
         );
     }
 
@@ -160,7 +162,7 @@ public class AssistantService {
                 List.of(),
                 result,
                 List.of(),
-                List.of("Show my loans", "Find unavailable books")
+                List.of(SHOW_MY_LOANS_SUGGESTION, "Find unavailable books")
         );
     }
 
@@ -178,7 +180,7 @@ public class AssistantService {
                 List.of(),
                 List.of(),
                 result,
-                List.of("Show my loans", "Help")
+                List.of(SHOW_MY_LOANS_SUGGESTION, "Help")
         );
     }
 

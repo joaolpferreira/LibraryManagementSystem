@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.net.URI;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 
 @Validated
@@ -37,11 +38,12 @@ public record MetadataProperties(
     }
 
     private static String normalizeBaseUrl(String value) {
-        String normalized = value.trim().replaceAll("/+$", "");
+        String normalized = StringUtils.trimTrailingCharacter(value.trim(), '/');
         try {
             URI uri = URI.create(normalized);
+            String scheme = uri.getScheme();
             if (uri.getHost() == null
-                    || !(uri.getScheme().equals("http") || uri.getScheme().equals("https"))) {
+                    || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
                 throw new IllegalArgumentException();
             }
             return normalized;

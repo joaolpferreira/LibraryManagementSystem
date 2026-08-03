@@ -231,11 +231,13 @@ class LibraryMcpToolsTest {
 
     @Test
     void rejectsMissingBlankAndOversizedNaturalLanguageQuestions() {
+        String oversizedQuestion = "x".repeat(301);
+
         assertThatThrownBy(() -> tools.naturalLanguageSearch(null, null, null))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> tools.naturalLanguageSearch(" ", null, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> tools.naturalLanguageSearch("x".repeat(301), null, null))
+        assertThatThrownBy(() -> tools.naturalLanguageSearch(oversizedQuestion, null, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

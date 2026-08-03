@@ -11,6 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class BookService {
 
+    private static final String BOOK_PREFIX = "Book ";
+    private static final String NOT_FOUND_SUFFIX = " was not found";
+
     private final BookRepository bookRepository;
     private final ReservationService reservationService;
 
@@ -22,7 +25,10 @@ public class BookService {
     @Transactional(readOnly = true)
     public Page<BookResponse> search(String query, Boolean availableOnly, Pageable pageable) {
         String normalizedQuery = query == null || query.isBlank() ? "" : query.trim();
-        int availabilityFilter = availableOnly == null ? -1 : availableOnly ? 1 : 0;
+        int availabilityFilter = -1;
+        if (availableOnly != null) {
+            availabilityFilter = availableOnly ? 1 : 0;
+        }
         return bookRepository.search(normalizedQuery, availabilityFilter, pageable)
                 .map(BookResponse::from);
     }
@@ -51,7 +57,9 @@ public class BookService {
     @Transactional
     public BookResponse update(Long id, BookRequest request) {
         Book book = bookRepository.findActiveByIdForUpdate(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Book " + id + " was not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        BOOK_PREFIX + id + NOT_FOUND_SUFFIX
+                ));
         String isbn = normalizeIsbn(request.isbn());
         if (bookRepository.existsByIsbnIgnoreCaseAndIdNot(isbn, id)) {
             throw new ConflictException("A book with ISBN " + isbn + " already exists");
@@ -75,7 +83,9 @@ public class BookService {
     @Transactional
     public void remove(Long id) {
         Book book = bookRepository.findActiveByIdForUpdate(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Book " + id + " was not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        BOOK_PREFIX + id + NOT_FOUND_SUFFIX
+                ));
         reservationService.assertNoActiveReservations(book);
         try {
             book.deactivate();
@@ -86,7 +96,9 @@ public class BookService {
 
     private Book findActive(Long id) {
         return bookRepository.findByIdAndActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Book " + id + " was not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        BOOK_PREFIX + id + NOT_FOUND_SUFFIX
+                ));
     }
 
     private static String normalizeIsbn(String isbn) {

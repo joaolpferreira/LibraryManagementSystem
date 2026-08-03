@@ -40,6 +40,8 @@ class MetadataPropertiesTest {
 
     @Test
     void normalizesProviderUrlsAndRejectsUnsafeConfiguration() {
+        Duration oneSecond = Duration.ofSeconds(1);
+        Duration negativeOneSecond = Duration.ofSeconds(-1);
         MetadataProperties properties = new MetadataProperties(
                 "https://catalog.test///",
                 "http://localhost:8081/",
@@ -52,27 +54,27 @@ class MetadataPropertiesTest {
 
         assertThatThrownBy(() -> new MetadataProperties(
                 "file:///tmp/catalog", "https://covers.test",
-                Duration.ofSeconds(1), Duration.ofSeconds(1), "agent"
+                oneSecond, oneSecond, "agent"
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("absolute HTTP or HTTPS");
         assertThatThrownBy(() -> new MetadataProperties(
                 "ftp://catalog.test", "https://covers.test",
-                Duration.ofSeconds(1), Duration.ofSeconds(1), "agent"
+                oneSecond, oneSecond, "agent"
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("absolute HTTP or HTTPS");
         assertThatThrownBy(() -> new MetadataProperties(
                 "not a url", "https://covers.test",
-                Duration.ofSeconds(1), Duration.ofSeconds(1), "agent"
+                oneSecond, oneSecond, "agent"
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("absolute HTTP or HTTPS");
         assertThatThrownBy(() -> new MetadataProperties(
                 "https://catalog.test", "https://covers.test",
-                Duration.ZERO, Duration.ofSeconds(1), "agent"
+                Duration.ZERO, oneSecond, "agent"
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("timeouts must be positive");
         assertThatThrownBy(() -> new MetadataProperties(
                 "https://catalog.test", "https://covers.test",
-                Duration.ofSeconds(1), Duration.ofSeconds(-1), "agent"
+                oneSecond, negativeOneSecond, "agent"
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("timeouts must be positive");
     }

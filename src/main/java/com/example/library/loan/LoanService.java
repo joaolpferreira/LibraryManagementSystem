@@ -24,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LoanService {
 
+    private static final String NOT_FOUND_SUFFIX = " was not found";
+
     private final BookRepository bookRepository;
     private final LoanRepository loanRepository;
     private final LibraryUserRepository userRepository;
@@ -55,7 +57,7 @@ public class LoanService {
         LibraryUser borrower = findUser(username);
         Book book = bookRepository.findActiveByIdForUpdate(request.bookId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Book " + request.bookId() + " was not found"
+                        "Book " + request.bookId() + NOT_FOUND_SUFFIX
                 ));
         if (loanRepository.existsByBookIdAndBorrowerIdAndReturnedAtIsNull(
                 book.getId(), borrower.getId())) {
@@ -81,7 +83,9 @@ public class LoanService {
     @Transactional
     public LoanResponse returnBook(Long loanId, String username) {
         Loan loan = loanRepository.findByIdForUpdate(loanId)
-                .orElseThrow(() -> new ResourceNotFoundException("Loan " + loanId + " was not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Loan " + loanId + NOT_FOUND_SUFFIX
+                ));
         if (!loan.getBorrower().getUsername().equals(username)) {
             throw new AccessDeniedException("A client can only return their own loans");
         }
@@ -124,7 +128,9 @@ public class LoanService {
     @Transactional(readOnly = true)
     public LoanResponse get(Long loanId, String username, boolean owner) {
         Loan loan = loanRepository.findDetailedById(loanId)
-                .orElseThrow(() -> new ResourceNotFoundException("Loan " + loanId + " was not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Loan " + loanId + NOT_FOUND_SUFFIX
+                ));
         if (!owner && !loan.getBorrower().getUsername().equals(username)) {
             throw new AccessDeniedException("A client can only view their own loans");
         }
