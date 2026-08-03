@@ -23,6 +23,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -89,6 +90,9 @@ class LibraryApiIntegrationTest {
                 .andExpect(jsonPath("$.result.tools[?(@.name == 'library_search_books')]").exists())
                 .andExpect(jsonPath("$.result.tools[?(@.name == 'library_natural_language_search')]").exists())
                 .andExpect(jsonPath("$.result.tools[?(@.name == 'library_get_recommendations')]").exists())
+                .andExpect(jsonPath(
+                        "$.result.tools[?(@.name == 'library_get_recommendations')].outputSchema.type"
+                ).value(hasItem("object")))
                 .andExpect(jsonPath("$.result.tools[?(@.name == 'library_enrich_book_metadata')]").exists())
                 .andExpect(jsonPath("$.result.tools[?(@.name == 'library_add_book')]").exists());
     }

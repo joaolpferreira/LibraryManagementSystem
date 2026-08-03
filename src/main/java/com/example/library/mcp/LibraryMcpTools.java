@@ -155,12 +155,14 @@ public class LibraryMcpTools {
             )
     )
     @PreAuthorize(CLIENT_ROLE)
-    public List<RecommendationResponse> recommendations(
+    public McpListResponse<RecommendationResponse> recommendations(
             @McpToolParam(description = "Number of recommendations from 1 to 20; defaults to 5", required = false)
             Integer limit
     ) {
         int validLimit = inputs.integerBetween(limit, 5, 1, 20, "limit");
-        return recommendationService.recommend(authentication.username(), validLimit);
+        return new McpListResponse<>(
+                recommendationService.recommend(authentication.username(), validLimit)
+        );
     }
 
     @McpTool(

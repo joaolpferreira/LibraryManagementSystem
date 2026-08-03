@@ -224,7 +224,7 @@ class LibraryMcpToolsTest {
 
         assertThat(tools.naturalLanguageSearch(" available clean code ", 0, 10))
                 .isSameAs(search);
-        assertThat(tools.recommendations(null)).containsExactly(recommendation);
+        assertThat(tools.recommendations(null).items()).containsExactly(recommendation);
         assertThat(tools.getBookMetadata(3L)).isSameAs(metadata);
         assertThat(tools.enrichBookMetadata(3L)).isSameAs(metadata);
     }

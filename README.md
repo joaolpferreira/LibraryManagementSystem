@@ -3,8 +3,8 @@
 A Java 25 and Spring Boot REST API for managing a small library inventory,
 borrowing books, returning them, and preserving loan history.
 
-The project implements every required item in the exercise and all nine optional
-items:
+The project provides the complete library workflow plus its search and
+AI-integration extensions:
 
 - PostgreSQL integration testing with Testcontainers
 - An application event emitted after a book return is committed
@@ -16,13 +16,9 @@ items:
 - persisted ISBN metadata enrichment through Open Library
 - a read-only, role-aware chat assistant API grounded in live application data
 
-See [REQUIREMENTS.md](REQUIREMENTS.md) for the requirement-to-code/test
-traceability matrix and [ROADMAP.md](ROADMAP.md) for the implementation plan,
-design decisions, and suggested next phases.
+## Implemented capabilities
 
-## Requirements covered
-
-| Exercise requirement | Implementation |
+| Capability | Implementation |
 |---|---|
 | Client and owner roles | Database-backed users and Spring Security HTTP Basic |
 | View and search books | Paginated `GET /api/books` with text and availability filters |
@@ -42,6 +38,17 @@ design decisions, and suggested next phases.
 | Spring Data JPA | JPA entities and repositories |
 | REST APIs | Spring MVC controllers with validated DTOs |
 | Database migrations | Flyway versioned SQL migrations |
+
+## Architecture
+
+![Library Management System architecture](docs/architecture.svg)
+
+REST controllers and MCP tools are inbound adapters over the same application
+services. This keeps authorization and transport concerns at the boundary while
+preserving one implementation of the inventory, loan, return, fee, reservation,
+search, recommendation, metadata, and assistant rules. Spring Data repositories
+and Flyway own persistence; PostgreSQL is used by the Docker profile and H2 keeps
+the default development profile self-contained.
 
 ## Technical choices
 
@@ -192,23 +199,28 @@ which tools are read-only or destructive. Client-specific tools obtain the
 username from the authenticated security context; they never accept an
 impersonation username from the model.
 
-Use the official MCP Inspector to view schemas and call tools interactively:
+Use the official MCP Inspector to view schemas and call tools interactively as
+the demo client:
 
 ```powershell
-npx -y @modelcontextprotocol/inspector
+npx -y @modelcontextprotocol/inspector `
+  --server-url "http://localhost:8080/mcp" `
+  --transport http `
+  --header "Authorization: Basic Y2xpZW50OmNsaWVudDEyMw=="
 ```
 
-In the Inspector, select **Streamable HTTP**, enter
-`http://localhost:8080/mcp`, and add one of these request headers:
+The command opens a read-only Inspector session with the server URL and header
+already supplied. A read-only-session banner is expected: it means only that
+the launch configuration cannot be edited in the UI, not that MCP tools are
+read-only. To connect as the owner instead, replace the header value with:
 
 ```text
-Authorization: Basic Y2xpZW50OmNsaWVudDEyMw==
 Authorization: Basic b3duZXI6b3duZXIxMjM=
 ```
 
-The first value authenticates `client / client123`; the second authenticates
-`owner / owner123`. Use only one identity per connection. The demo credentials
-must be replaced before any non-local deployment.
+The client value authenticates `client / client123`; the owner value
+authenticates `owner / owner123`. Use only one identity per connection. The demo
+credentials must be replaced before any non-local deployment.
 
 List the tools directly from a terminal:
 
@@ -240,6 +252,8 @@ uses the MCP JSON-RPC protocol and advertises its own generated tool schemas.
 ## API
 
 All endpoints require HTTP Basic authentication.
+There is no separate login endpoint: send the Basic credentials on every REST
+request. Resource-specific reads additionally enforce ownership for clients.
 
 The complete, importable API contract is available in [`openapi.yml`](openapi.yml).
 Open that file with the IntelliJ Swagger/OpenAPI preview, the VS Code Swagger
@@ -252,33 +266,37 @@ For Postman Desktop, import
 It contains all REST operations, collection variables, authentication, example
 bodies, and folders matching the core and optional capabilities.
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| `GET` | `/api/books` | Client, Owner | Search active books |
-| `GET` | `/api/books/{id}` | Client, Owner | Get one active book |
-| `POST` | `/api/books` | Owner | Add a book |
-| `PUT` | `/api/books/{id}` | Owner | Update book details and copy count |
-| `DELETE` | `/api/books/{id}` | Owner | Soft-delete a book with no active loans |
-| `POST` | `/api/loans` | Client | Borrow an available book |
-| `GET` | `/api/loans/{id}` | Owner or owning client | Get one loan |
-| `POST` | `/api/loans/{id}/return` | Owning client | Return a book |
-| `GET` | `/api/loans/my` | Client | View personal loan history |
-| `GET` | `/api/loans/history` | Owner | View all loan history |
-| `GET` | `/api/late-fees/my` | Client | View personal late fees |
-| `GET` | `/api/late-fees` | Owner | View and filter all late fees |
-| `GET` | `/api/late-fees/{feeId}` | Owner or owning client | Get one late fee |
-| `POST` | `/api/late-fees/{feeId}/settlement` | Owner | Record a fee as paid or waived |
-| `POST` | `/api/reservations` | Client | Join an unavailable book's FIFO queue |
-| `GET` | `/api/reservations/my` | Client | View personal reservation history |
-| `GET` | `/api/reservations` | Owner | View and filter all reservations |
-| `GET` | `/api/reservations/books/{bookId}/queue` | Owner | Inspect a book's active queue |
-| `GET` | `/api/reservations/{reservationId}` | Owner or owning client | Get one reservation |
-| `POST` | `/api/reservations/{reservationId}/cancel` | Owning client | Cancel an active reservation |
-| `GET` | `/api/search/books/natural` | Client, Owner | Interpret and execute an English/Portuguese catalog question |
-| `GET` | `/api/recommendations/my` | Client | Get explainable personalized recommendations |
-| `GET` | `/api/books/{bookId}/metadata` | Client, Owner | Read persisted enriched metadata |
-| `POST` | `/api/books/{bookId}/metadata/enrich` | Owner | Refresh metadata from Open Library by ISBN |
-| `POST` | `/api/assistant/chat` | Client, Owner | Ask a read-only grounded library question |
+| Method | Path | Access | Main input | Success | Purpose |
+|---|---|---|---|---|---|
+| `GET` | `/api/books` | Client, Owner | `query`, `availableOnly`, `page`, `size`, `sort` | `200` | Search and filter active books |
+| `GET` | `/api/books/{id}` | Client, Owner | Book ID | `200` | Get one active book |
+| `POST` | `/api/books` | Owner | `BookRequest` JSON | `201` | Add a book |
+| `PUT` | `/api/books/{id}` | Owner | Book ID and `BookRequest` JSON | `200` | Replace editable book details and copy count |
+| `DELETE` | `/api/books/{id}` | Owner | Book ID | `204` | Soft-delete a book with no active loans or reservations |
+| `POST` | `/api/loans` | Client | `BorrowBookRequest` JSON | `201` | Borrow an available, unallocated copy |
+| `GET` | `/api/loans/{loanId}` | Owner or owning client | Loan ID | `200` | Get one loan |
+| `POST` | `/api/loans/{loanId}/return` | Owning client | Loan ID | `200` | Return a book, register any fee, and advance its queue |
+| `GET` | `/api/loans/my` | Client | `page`, `size`, `sort` | `200` | View personal loan history |
+| `GET` | `/api/loans/history` | Owner | `page`, `size`, `sort` | `200` | View complete loan history |
+| `GET` | `/api/late-fees/my` | Client | `status`, `page`, `size` | `200` | View personal late-fee history |
+| `GET` | `/api/late-fees` | Owner | `status`, `page`, `size` | `200` | View and filter every late fee |
+| `GET` | `/api/late-fees/{feeId}` | Owner or owning client | Late-fee ID | `200` | Get one late fee |
+| `POST` | `/api/late-fees/{feeId}/settlement` | Owner | Fee ID and `LateFeeSettlementRequest` JSON | `200` | Record a fee as paid or waived |
+| `POST` | `/api/reservations` | Client | `ReserveBookRequest` JSON | `201` | Join an unavailable book's FIFO queue |
+| `GET` | `/api/reservations/my` | Client | `status`, `page`, `size` | `200` | View personal reservation history |
+| `GET` | `/api/reservations` | Owner | `status`, `page`, `size` | `200` | View and filter every reservation |
+| `GET` | `/api/reservations/books/{bookId}/queue` | Owner | Book ID, `page`, `size` | `200` | Inspect a book's active FIFO queue |
+| `GET` | `/api/reservations/{reservationId}` | Owner or owning client | Reservation ID | `200` | Get one reservation |
+| `POST` | `/api/reservations/{reservationId}/cancel` | Owning client | Reservation ID | `200` | Cancel a waiting or ready reservation |
+| `GET` | `/api/search/books/natural` | Client, Owner | `question`, `page`, `size`, `sort` | `200` | Interpret and execute an English/Portuguese catalog question |
+| `GET` | `/api/recommendations/my` | Client | `limit` | `200` | Get explainable personalized recommendations |
+| `GET` | `/api/books/{bookId}/metadata` | Client, Owner | Book ID | `200` | Read persisted enriched metadata |
+| `POST` | `/api/books/{bookId}/metadata/enrich` | Owner | Book ID | `200` | Refresh metadata from Open Library by ISBN |
+| `POST` | `/api/assistant/chat` | Client, Owner | `AssistantRequest` JSON | `200` | Ask a read-only, grounded library question |
+
+These are all 25 REST operations implemented by the controllers. The separate
+`POST /mcp` transport endpoint is documented in the MCP section because its
+requests are MCP JSON-RPC messages rather than REST resources.
 
 ## Search, recommendations, metadata, and assistant
 

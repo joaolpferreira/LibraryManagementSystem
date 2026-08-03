@@ -1,14 +1,22 @@
 openapi: 3.0.3
 info:
   title: Library Management System API
-  version: 1.2.0
+  version: 1.3.0
   description: |
-    REST API for viewing and managing books and for borrowing, returning, and
-    auditing loans. Every operation uses HTTP Basic authentication.
+    Complete contract for the application's 25 REST operations: inventory,
+    loans, late fees, reservations, natural-language search, recommendations,
+    metadata enrichment, and the read-only chat assistant. Every operation uses
+    HTTP Basic authentication and declares its permitted application roles with
+    `x-required-roles`.
+
+    The application also exposes a secured Model Context Protocol endpoint at
+    `/mcp`. It is intentionally not modelled as a REST operation here because it
+    uses MCP JSON-RPC over Streamable HTTP and advertises its own tool schemas.
 
     Demo credentials:
     * owner / owner123 (OWNER role)
     * client / client123 (CLIENT role)
+x-rest-operation-count: 25
 servers:
   - url: http://localhost:8080
     description: Local Spring Boot server
@@ -44,6 +52,7 @@ paths:
     get:
       tags: [View Books]
       operationId: searchBooks
+      x-required-roles: [CLIENT, OWNER]
       summary: Search and filter active books
       description: |
         With no `availableOnly` parameter, returns both available and unavailable
@@ -85,6 +94,7 @@ paths:
     post:
       tags: [Manage Books]
       operationId: createBook
+      x-required-roles: [OWNER]
       summary: Add a book
       description: Requires the OWNER role. ISBN spaces and hyphens are removed before storage.
       requestBody:
@@ -126,6 +136,7 @@ paths:
     get:
       tags: [View Books]
       operationId: getBook
+      x-required-roles: [CLIENT, OWNER]
       summary: Get one active book
       responses:
         '200':
@@ -143,6 +154,7 @@ paths:
     put:
       tags: [Manage Books]
       operationId: updateBook
+      x-required-roles: [OWNER]
       summary: Replace a book's editable details
       description: Requires the OWNER role. The total cannot be lower than copies currently on loan.
       requestBody:
@@ -171,8 +183,9 @@ paths:
     delete:
       tags: [Manage Books]
       operationId: removeBook
+      x-required-roles: [OWNER]
       summary: Soft-delete a book
-      description: Requires the OWNER role. A book with an active loan cannot be removed.
+      description: Requires the OWNER role. A book with an active loan or reservation cannot be removed.
       responses:
         '204':
           description: Book deactivated successfully; no response body.
@@ -188,6 +201,7 @@ paths:
     post:
       tags: [Borrow Book]
       operationId: borrowBook
+      x-required-roles: [CLIENT]
       summary: Borrow an available copy
       description: Requires the CLIENT role. A client cannot have two active loans for the same book.
       requestBody:
@@ -228,6 +242,8 @@ paths:
     get:
       tags: [Book History]
       operationId: getLoan
+      x-required-roles: [CLIENT, OWNER]
+      x-resource-ownership: Clients can access only their own loan; owners can access any loan.
       summary: Get one loan
       description: Owners can view any loan; clients can view only their own loans.
       responses:
@@ -249,6 +265,8 @@ paths:
     post:
       tags: [Return Book]
       operationId: returnBook
+      x-required-roles: [CLIENT]
+      x-resource-ownership: The authenticated client must own the loan.
       summary: Return a client's own active loan
       responses:
         '200':
@@ -269,6 +287,7 @@ paths:
     get:
       tags: [Book History]
       operationId: getMyLoanHistory
+      x-required-roles: [CLIENT]
       summary: Get the authenticated client's loan history
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -291,6 +310,7 @@ paths:
     get:
       tags: [Book History]
       operationId: getAllLoanHistory
+      x-required-roles: [OWNER]
       summary: Get complete loan history
       description: Requires the OWNER role.
       parameters:
@@ -314,6 +334,7 @@ paths:
     get:
       tags: [Late Fees]
       operationId: getAllLateFees
+      x-required-roles: [OWNER]
       summary: Get all registered late fees
       description: Requires the OWNER role. Omit `status` to include every lifecycle state.
       parameters:
@@ -337,6 +358,7 @@ paths:
     get:
       tags: [Late Fees]
       operationId: getMyLateFees
+      x-required-roles: [CLIENT]
       summary: Get the authenticated client's late fees
       parameters:
         - $ref: '#/components/parameters/LateFeeStatusFilter'
@@ -361,6 +383,8 @@ paths:
     get:
       tags: [Late Fees]
       operationId: getLateFee
+      x-required-roles: [CLIENT, OWNER]
+      x-resource-ownership: Clients can access only their own fee; owners can access any fee.
       summary: Get one registered late fee
       description: Owners can view any fee; clients can view only their own fees.
       responses:
@@ -382,6 +406,7 @@ paths:
     post:
       tags: [Late Fees]
       operationId: settleLateFee
+      x-required-roles: [OWNER]
       summary: Record a late fee as paid or waived
       description: |
         Requires the OWNER role. This records an external payment or an approved
@@ -422,6 +447,7 @@ paths:
     post:
       tags: [Reservations]
       operationId: reserveBook
+      x-required-roles: [CLIENT]
       summary: Join a book's FIFO waiting queue
       description: |
         Requires the CLIENT role. Reservations are accepted when no unallocated
@@ -461,6 +487,7 @@ paths:
     get:
       tags: [Reservations]
       operationId: getAllReservations
+      x-required-roles: [OWNER]
       summary: Get all reservation history
       description: Requires the OWNER role. Omit `status` to include all lifecycle states.
       parameters:
@@ -484,6 +511,7 @@ paths:
     get:
       tags: [Reservations]
       operationId: getMyReservations
+      x-required-roles: [CLIENT]
       summary: Get the authenticated client's reservation history
       parameters:
         - $ref: '#/components/parameters/ReservationStatusFilter'
@@ -508,6 +536,7 @@ paths:
     get:
       tags: [Reservations]
       operationId: getBookReservationQueue
+      x-required-roles: [OWNER]
       summary: Inspect a book's active FIFO queue
       description: Requires the OWNER role. Returns `READY` and `WAITING` reservations in queue order.
       parameters:
@@ -532,6 +561,8 @@ paths:
     get:
       tags: [Reservations]
       operationId: getReservation
+      x-required-roles: [CLIENT, OWNER]
+      x-resource-ownership: Clients can access only their own reservation; owners can access any reservation.
       summary: Get one reservation
       description: Owners can view any reservation; clients can view only their own.
       responses:
@@ -553,6 +584,8 @@ paths:
     post:
       tags: [Reservations]
       operationId: cancelReservation
+      x-required-roles: [CLIENT]
+      x-resource-ownership: The authenticated client must own the reservation.
       summary: Cancel the authenticated client's active reservation
       description: A `WAITING` or `READY` reservation can be cancelled; terminal states cannot.
       responses:
@@ -574,6 +607,7 @@ paths:
     get:
       tags: [Natural Language Search]
       operationId: naturalLanguageBookSearch
+      x-required-roles: [CLIENT, OWNER]
       summary: Search the catalog with a natural-language question
       description: |
         Interprets common English and Portuguese availability expressions and
@@ -609,6 +643,7 @@ paths:
     get:
       tags: [Recommendations]
       operationId: getMyRecommendations
+      x-required-roles: [CLIENT]
       summary: Recommend books to the authenticated client
       description: |
         Excludes previously borrowed books and ranks the remaining active catalog
@@ -643,6 +678,7 @@ paths:
     get:
       tags: [Metadata Enrichment]
       operationId: getBookMetadata
+      x-required-roles: [CLIENT, OWNER]
       summary: Get persisted enriched metadata for a book
       responses:
         '200':
@@ -663,6 +699,7 @@ paths:
     post:
       tags: [Metadata Enrichment]
       operationId: enrichBookMetadata
+      x-required-roles: [OWNER]
       summary: Fetch and persist metadata by the book's ISBN
       description: |
         Requires OWNER. Repeating the operation updates the same versioned record.
@@ -689,6 +726,7 @@ paths:
     post:
       tags: [Chat Assistant]
       operationId: chatWithLibraryAssistant
+      x-required-roles: [CLIENT, OWNER]
       summary: Ask a read-only question about live library data
       description: |
         Routes the message to catalog search, recommendations, loans,
