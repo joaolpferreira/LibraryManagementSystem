@@ -1,5 +1,6 @@
 package com.example.library.book;
 
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -22,6 +23,14 @@ public interface BookRepository extends JpaRepository<Book, Long> {
                 or lower(book.title) like lower(concat('%', :query, '%'))
                 or lower(book.author) like lower(concat('%', :query, '%'))
                 or lower(book.isbn) like lower(concat('%', :query, '%'))
+                or lower(coalesce(book.description, '')) like lower(concat('%', :query, '%'))
+                or exists (
+                    select metadata.bookId
+                    from BookMetadata metadata
+                    join metadata.subjects subject
+                    where metadata.bookId = book.id
+                      and lower(subject) like lower(concat('%', :query, '%'))
+                )
               )
               and (
                 :availabilityFilter = -1
@@ -44,4 +53,6 @@ public interface BookRepository extends JpaRepository<Book, Long> {
     boolean existsByIsbnIgnoreCase(String isbn);
 
     boolean existsByIsbnIgnoreCaseAndIdNot(String isbn, Long id);
+
+    List<Book> findByActiveTrueOrderByTitleAsc();
 }

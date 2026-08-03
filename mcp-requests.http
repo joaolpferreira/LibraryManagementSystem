@@ -1,0 +1,154 @@
+@baseUrl = http://localhost:8080
+@clientUsername = client
+@clientPassword = client123
+@ownerUsername = owner
+@ownerPassword = owner123
+
+### List all MCP tools as a client
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list",
+  "params": {}
+}
+
+### Search books through MCP
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "library_search_books",
+    "arguments": {
+      "query": "clean",
+      "availableOnly": true,
+      "page": 0,
+      "size": 20
+    }
+  }
+}
+
+### Borrow a book through MCP as a client
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "library_borrow_book",
+    "arguments": {
+      "bookId": 1,
+      "loanDays": 14
+    }
+  }
+}
+
+### View complete loan history through MCP as the owner
+POST {{baseUrl}}/mcp
+Authorization: Basic {{ownerUsername}} {{ownerPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "library_get_loan_history",
+    "arguments": {
+      "page": 0,
+      "size": 20
+    }
+  }
+}
+
+### Authorization check: a client cannot add inventory
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tools/call",
+  "params": {
+    "name": "library_add_book",
+    "arguments": {
+      "isbn": "9780321356680",
+      "title": "Effective Java",
+      "author": "Joshua Bloch",
+      "totalCopies": 1
+    }
+  }
+}
+
+### Natural-language search through MCP
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "method": "tools/call",
+  "params": {
+    "name": "library_natural_language_search",
+    "arguments": {
+      "question": "livros disponíveis por Martin Fowler",
+      "page": 0,
+      "size": 10
+    }
+  }
+}
+
+### Personalized recommendations through MCP
+POST {{baseUrl}}/mcp
+Authorization: Basic {{clientUsername}} {{clientPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "library_get_recommendations",
+    "arguments": {
+      "limit": 5
+    }
+  }
+}
+
+### Enrich a book through MCP as the owner
+POST {{baseUrl}}/mcp
+Authorization: Basic {{ownerUsername}} {{ownerPassword}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "tools/call",
+  "params": {
+    "name": "library_enrich_book_metadata",
+    "arguments": {
+      "bookId": 1
+    }
+  }
+}

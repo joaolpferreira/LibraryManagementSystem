@@ -1,6 +1,24 @@
 spring:
   application:
     name: library-management-system
+  ai:
+    mcp:
+      server:
+        enabled: true
+        name: library-management-system
+        version: 1.0.0
+        protocol: STATELESS
+        type: SYNC
+        instructions: >-
+          Use these tools to search and manage the library. Respect CLIENT and OWNER
+          permissions, inspect availability before borrowing, and never invent IDs.
+        capabilities:
+          tool: true
+          resource: false
+          prompt: false
+          completion: false
+        annotation-scanner:
+          enabled: true
   datasource:
     url: jdbc:h2:mem:library;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     username: sa
@@ -24,3 +42,17 @@ server:
   error:
     include-message: never
     include-stacktrace: never
+
+library:
+  late-fee:
+    daily-rate: 0.50
+    currency: EUR
+  reservation:
+    ready-hold: 48h
+    expiration-scan-delay: 1m
+  metadata:
+    base-url: https://openlibrary.org
+    covers-base-url: https://covers.openlibrary.org
+    connect-timeout: 3s
+    read-timeout: 5s
+    user-agent: LibraryManagementSystem/1.0 (metadata enrichment)

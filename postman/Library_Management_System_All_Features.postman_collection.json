@@ -1,0 +1,392 @@
+{
+  "info": {
+    "_postman_id": "d2445252-d3ef-42f2-b4ce-14fdf90e2f57",
+    "name": "Library Management System - All REST Features",
+    "description": "All 25 REST operations, grouped by the six core functionalities and the implemented optional capabilities. Start the API, adjust collection variables when required, and run requests in order. Borrow captures loanId; add book captures createdBookId. Reservation and late-fee requests require unavailableBookId/reservationId/feeId values that exist in your current database. MCP uses JSON-RPC rather than REST and is documented separately in mcp-requests.http.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      { "key": "username", "value": "{{clientUsername}}", "type": "string" },
+      { "key": "password", "value": "{{clientPassword}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "clientUsername", "value": "client", "type": "string" },
+    { "key": "clientPassword", "value": "client123", "type": "string" },
+    { "key": "ownerUsername", "value": "owner", "type": "string" },
+    { "key": "ownerPassword", "value": "owner123", "type": "string" },
+    { "key": "bookId", "value": "1", "type": "string" },
+    { "key": "unavailableBookId", "value": "1", "type": "string" },
+    { "key": "loanId", "value": "1", "type": "string" },
+    { "key": "manageIsbn", "value": "9780000000001", "type": "string" },
+    { "key": "createdBookId", "value": "", "type": "string" },
+    { "key": "reservationId", "value": "1", "type": "string" },
+    { "key": "feeId", "value": "1", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Core 1 - View Books",
+      "item": [
+        {
+          "name": "Search books (tri-state availability)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/books?query=software&availableOnly=true&page=0&size=20&sort=title,asc",
+            "description": "Remove availableOnly to return both states; use false for books with zero available copies. Search covers title, author, ISBN, description, and enriched subjects."
+          },
+          "response": []
+        },
+        {
+          "name": "Get one book",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/books/{{bookId}}" },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Core 2 - Borrow Book",
+      "item": [
+        {
+          "name": "Borrow available book",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookId\": {{bookId}},\n  \"loanDays\": 14\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/loans"
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Loan created', () => pm.response.to.have.status(201));",
+                "if (pm.response.code === 201) pm.collectionVariables.set('loanId', pm.response.json().id);"
+              ]
+            }
+          }],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Core 3 - Return Book",
+      "item": [
+        {
+          "name": "Return own loan",
+          "request": { "method": "POST", "header": [], "url": "{{baseUrl}}/api/loans/{{loanId}}/return" },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Core 4 - Manage Books (OWNER)",
+      "item": [
+        {
+          "name": "Add book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{ownerUsername}}", "type": "string" },
+                { "key": "password", "value": "{{ownerPassword}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"{{manageIsbn}}\",\n  \"title\": \"Effective Java\",\n  \"author\": \"Joshua Bloch\",\n  \"description\": \"Professional Java practices.\",\n  \"totalCopies\": 2\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/books"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.collectionVariables.set('manageIsbn', '978' + Date.now().toString().slice(-10));"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Book created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set('createdBookId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{ownerUsername}}", "type": "string" },
+                { "key": "password", "value": "{{ownerPassword}}", "type": "string" }
+              ]
+            },
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"{{manageIsbn}}\",\n  \"title\": \"Effective Java - Updated\",\n  \"author\": \"Joshua Bloch\",\n  \"description\": \"Updated catalog description.\",\n  \"totalCopies\": 3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/books/{{createdBookId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete book",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{ownerUsername}}", "type": "string" },
+                { "key": "password", "value": "{{ownerPassword}}", "type": "string" }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/books/{{createdBookId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Core 5 - Book History",
+      "item": [
+        {
+          "name": "Get one loan (owner or owning client)",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/loans/{{loanId}}" },
+          "response": []
+        },
+        {
+          "name": "My loan history",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/loans/my?page=0&size=20" },
+          "response": []
+        },
+        {
+          "name": "All loan history (OWNER)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{ownerUsername}}", "type": "string" },
+                { "key": "password", "value": "{{ownerPassword}}", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/loans/history?page=0&size=20"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Core 6 - Authentication",
+      "description": "The collection-level identity is CLIENT. OWNER requests override it. Change the credential variables to test another database-backed account.",
+      "item": []
+    },
+    {
+      "name": "Optional - Late Fee Registration",
+      "item": [
+        {
+          "name": "My late fees",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/late-fees/my?status=OUTSTANDING&page=0&size=20" },
+          "response": []
+        },
+        {
+          "name": "All late fees (OWNER)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{ownerUsername}}", "type": "string" },
+                { "key": "password", "value": "{{ownerPassword}}", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/late-fees?page=0&size=20"
+          },
+          "response": []
+        },
+        {
+          "name": "Get one late fee",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/late-fees/{{feeId}}" },
+          "response": []
+        },
+        {
+          "name": "Settle late fee (OWNER)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{ownerUsername}}", "type": "string" },
+                { "key": "password", "value": "{{ownerPassword}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"PAID\",\n  \"note\": \"Payment confirmed externally\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/late-fees/{{feeId}}/settlement"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Optional - FIFO Reservation Queue",
+      "item": [
+        {
+          "name": "Join queue",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookId\": {{unavailableBookId}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/reservations"
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["if (pm.response.code === 201) pm.collectionVariables.set('reservationId', pm.response.json().id);"]
+            }
+          }],
+          "response": []
+        },
+        {
+          "name": "My reservations",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/reservations/my?page=0&size=20" },
+          "response": []
+        },
+        {
+          "name": "All reservations (OWNER)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{ownerUsername}}", "type": "string" },
+                { "key": "password", "value": "{{ownerPassword}}", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reservations?page=0&size=20"
+          },
+          "response": []
+        },
+        {
+          "name": "Inspect book queue (OWNER)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{ownerUsername}}", "type": "string" },
+                { "key": "password", "value": "{{ownerPassword}}", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reservations/books/{{unavailableBookId}}/queue?page=0&size=20"
+          },
+          "response": []
+        },
+        {
+          "name": "Get one reservation",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/reservations/{{reservationId}}" },
+          "response": []
+        },
+        {
+          "name": "Cancel own reservation",
+          "request": { "method": "POST", "header": [], "url": "{{baseUrl}}/api/reservations/{{reservationId}}/cancel" },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Optional - Natural Language Search",
+      "item": [{
+        "name": "Search in English or Portuguese",
+        "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/search/books/natural?question=Find%20available%20books%20about%20software&page=0&size=20" },
+        "response": []
+      }]
+    },
+    {
+      "name": "Optional - Recommendation System",
+      "item": [{
+        "name": "My explainable recommendations",
+        "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/recommendations/my?limit=5" },
+        "response": []
+      }]
+    },
+    {
+      "name": "Optional - Metadata Enrichment",
+      "item": [
+        {
+          "name": "Get persisted metadata",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/books/{{bookId}}/metadata" },
+          "response": []
+        },
+        {
+          "name": "Refresh metadata from Open Library (OWNER)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{ownerUsername}}", "type": "string" },
+                { "key": "password", "value": "{{ownerPassword}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/books/{{bookId}}/metadata/enrich"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Optional - Chat Assistant API",
+      "item": [{
+        "name": "Ask a grounded read-only question",
+        "request": {
+          "method": "POST",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"message\": \"Recommend an available software book\"\n}",
+            "options": { "raw": { "language": "json" } }
+          },
+          "url": "{{baseUrl}}/api/assistant/chat"
+        },
+        "response": []
+      }]
+    }
+  ]
+}

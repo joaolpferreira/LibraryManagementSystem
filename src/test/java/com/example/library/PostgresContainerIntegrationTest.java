@@ -1,6 +1,9 @@
 package com.example.library;
 
 import com.example.library.book.BookRepository;
+import com.example.library.fee.LateFeeRepository;
+import com.example.library.metadata.BookMetadataRepository;
+import com.example.library.reservation.BookReservationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,6 +40,15 @@ class PostgresContainerIntegrationTest {
     @Autowired
     private BookRepository bookRepository;
 
+    @Autowired
+    private LateFeeRepository lateFeeRepository;
+
+    @Autowired
+    private BookReservationRepository reservationRepository;
+
+    @Autowired
+    private BookMetadataRepository metadataRepository;
+
     @Test
     void flywayCreatesAndSeedsThePostgresDatabase() {
         Integer books = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM books", Integer.class);
@@ -46,7 +58,10 @@ class PostgresContainerIntegrationTest {
         );
 
         assertThat(books).isEqualTo(3);
-        assertThat(migrations).isEqualTo(2);
+        assertThat(migrations).isEqualTo(5);
+        assertThat(lateFeeRepository.count()).isZero();
+        assertThat(reservationRepository.count()).isZero();
+        assertThat(metadataRepository.count()).isZero();
         jdbcTemplate.update("UPDATE books SET available_copies = 0 WHERE id = 2");
 
         assertThat(bookRepository.search("", -1, PageRequest.of(0, 20)).getTotalElements())

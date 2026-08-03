@@ -1,0 +1,1434 @@
+openapi: 3.0.3
+info:
+  title: Library Management System API
+  version: 1.3.0
+  description: |
+    Complete contract for the application's 25 REST operations: inventory,
+    loans, late fees, reservations, natural-language search, recommendations,
+    metadata enrichment, and the read-only chat assistant. Every operation uses
+    HTTP Basic authentication and declares its permitted application roles with
+    `x-required-roles`.
+
+    The application also exposes a secured Model Context Protocol endpoint at
+    `/mcp`. It is intentionally not modelled as a REST operation here because it
+    uses MCP JSON-RPC over Streamable HTTP and advertises its own tool schemas.
+
+    Demo credentials:
+    * owner / owner123 (OWNER role)
+    * client / client123 (CLIENT role)
+x-rest-operation-count: 25
+servers:
+  - url: http://localhost:8080
+    description: Local Spring Boot server
+security:
+  - basicAuth: []
+tags:
+  - name: View Books
+    description: View, search, and filter the active catalogue (CLIENT or OWNER).
+  - name: Borrow Book
+    description: Borrow an available book (CLIENT only).
+  - name: Return Book
+    description: Return the authenticated client's own loan (CLIENT only).
+  - name: Manage Books
+    description: Add, update, and soft-delete catalogue entries (OWNER only).
+  - name: Book History
+    description: View client-specific or complete loan history.
+  - name: Authentication
+    description: All operations require an authenticated CLIENT or OWNER as documented.
+  - name: Late Fees
+    description: Automatic overdue-fee registration, visibility, and owner settlement.
+  - name: Reservations
+    description: FIFO waiting queues, time-limited copy allocation, and reservation history.
+  - name: Natural Language Search
+    description: Deterministic English and Portuguese catalog-intent interpretation.
+  - name: Recommendations
+    description: Explainable, personalized recommendations for authenticated clients.
+  - name: Metadata Enrichment
+    description: Persisted bibliographic metadata obtained by ISBN from Open Library.
+  - name: Chat Assistant
+    description: Read-only, role-aware conversational access to live library data.
+paths:
+  /api/books:
+    get:
+      tags: [View Books]
+      operationId: searchBooks
+      x-required-roles: [CLIENT, OWNER]
+      summary: Search and filter active books
+      description: |
+        With no `availableOnly` parameter, returns both available and unavailable
+        active books. `true` returns only books with at least one available copy;
+        `false` returns only books with zero available copies.
+      parameters:
+        - name: query
+          in: query
+          description: Case-insensitive partial match against title, author, ISBN, description, or enriched subject.
+          schema:
+            type: string
+          example: clean
+        - name: availableOnly
+          in: query
+          description: Tri-state availability filter; omit it to return both states.
+          schema:
+            type: boolean
+          examples:
+            available:
+              value: true
+            unavailable:
+              value: false
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/BookSort'
+      responses:
+        '200':
+          description: Page of matching active books.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Manage Books]
+      operationId: createBook
+      x-required-roles: [OWNER]
+      summary: Add a book
+      description: Requires the OWNER role. ISBN spaces and hyphens are removed before storage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookRequest'
+            example:
+              isbn: '9780321356680'
+              title: Effective Java
+              author: Joshua Bloch
+              description: Best practices for the Java platform.
+              totalCopies: 2
+      responses:
+        '201':
+          description: Book created. The Location header points to the new resource.
+          headers:
+            Location:
+              description: Absolute URL of the created book.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/books/{id}:
+    parameters:
+      - $ref: '#/components/parameters/BookId'
+    get:
+      tags: [View Books]
+      operationId: getBook
+      x-required-roles: [CLIENT, OWNER]
+      summary: Get one active book
+      responses:
+        '200':
+          description: Book found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Manage Books]
+      operationId: updateBook
+      x-required-roles: [OWNER]
+      summary: Replace a book's editable details
+      description: Requires the OWNER role. The total cannot be lower than copies currently on loan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookRequest'
+      responses:
+        '200':
+          description: Updated book.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [Manage Books]
+      operationId: removeBook
+      x-required-roles: [OWNER]
+      summary: Soft-delete a book
+      description: Requires the OWNER role. A book with an active loan or reservation cannot be removed.
+      responses:
+        '204':
+          description: Book deactivated successfully; no response body.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/loans:
+    post:
+      tags: [Borrow Book]
+      operationId: borrowBook
+      x-required-roles: [CLIENT]
+      summary: Borrow an available copy
+      description: Requires the CLIENT role. A client cannot have two active loans for the same book.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BorrowBookRequest'
+            example:
+              bookId: 1
+              loanDays: 14
+      responses:
+        '201':
+          description: Loan created. The Location header points to the new loan.
+          headers:
+            Location:
+              description: Absolute URL of the created loan.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/loans/{loanId}:
+    parameters:
+      - $ref: '#/components/parameters/LoanId'
+    get:
+      tags: [Book History]
+      operationId: getLoan
+      x-required-roles: [CLIENT, OWNER]
+      x-resource-ownership: Clients can access only their own loan; owners can access any loan.
+      summary: Get one loan
+      description: Owners can view any loan; clients can view only their own loans.
+      responses:
+        '200':
+          description: Loan found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/loans/{loanId}/return:
+    parameters:
+      - $ref: '#/components/parameters/LoanId'
+    post:
+      tags: [Return Book]
+      operationId: returnBook
+      x-required-roles: [CLIENT]
+      x-resource-ownership: The authenticated client must own the loan.
+      summary: Return a client's own active loan
+      responses:
+        '200':
+          description: Returned loan, including whether it was late.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/loans/my:
+    get:
+      tags: [Book History]
+      operationId: getMyLoanHistory
+      x-required-roles: [CLIENT]
+      summary: Get the authenticated client's loan history
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/LoanSort'
+      responses:
+        '200':
+          description: Page containing this client's active and returned loans.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/loans/history:
+    get:
+      tags: [Book History]
+      operationId: getAllLoanHistory
+      x-required-roles: [OWNER]
+      summary: Get complete loan history
+      description: Requires the OWNER role.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/LoanSort'
+      responses:
+        '200':
+          description: Page containing all clients' active and returned loans.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/late-fees:
+    get:
+      tags: [Late Fees]
+      operationId: getAllLateFees
+      x-required-roles: [OWNER]
+      summary: Get all registered late fees
+      description: Requires the OWNER role. Omit `status` to include every lifecycle state.
+      parameters:
+        - $ref: '#/components/parameters/LateFeeStatusFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Page containing late fees for all clients.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LateFeePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/late-fees/my:
+    get:
+      tags: [Late Fees]
+      operationId: getMyLateFees
+      x-required-roles: [CLIENT]
+      summary: Get the authenticated client's late fees
+      parameters:
+        - $ref: '#/components/parameters/LateFeeStatusFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Page containing only this client's late fees.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LateFeePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/late-fees/{feeId}:
+    parameters:
+      - $ref: '#/components/parameters/LateFeeId'
+    get:
+      tags: [Late Fees]
+      operationId: getLateFee
+      x-required-roles: [CLIENT, OWNER]
+      x-resource-ownership: Clients can access only their own fee; owners can access any fee.
+      summary: Get one registered late fee
+      description: Owners can view any fee; clients can view only their own fees.
+      responses:
+        '200':
+          description: Late fee found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LateFeeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/late-fees/{feeId}/settlement:
+    parameters:
+      - $ref: '#/components/parameters/LateFeeId'
+    post:
+      tags: [Late Fees]
+      operationId: settleLateFee
+      x-required-roles: [OWNER]
+      summary: Record a late fee as paid or waived
+      description: |
+        Requires the OWNER role. This records an external payment or an approved
+        waiver; it does not process a card or bank payment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LateFeeSettlementRequest'
+            examples:
+              paid:
+                value:
+                  action: PAID
+                  note: Receipt 42
+              waived:
+                value:
+                  action: WAIVED
+                  note: Courtesy waiver approved by owner
+      responses:
+        '200':
+          description: Updated late-fee lifecycle state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LateFeeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/reservations:
+    post:
+      tags: [Reservations]
+      operationId: reserveBook
+      x-required-roles: [CLIENT]
+      summary: Join a book's FIFO waiting queue
+      description: |
+        Requires the CLIENT role. Reservations are accepted when no unallocated
+        copy can be borrowed. A client cannot reserve a book they currently have
+        on loan or already have an active reservation for.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReserveBookRequest'
+            example:
+              bookId: 2
+      responses:
+        '201':
+          description: Waiting reservation created in FIFO order.
+          headers:
+            Location:
+              description: Absolute URL of the created reservation.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [Reservations]
+      operationId: getAllReservations
+      x-required-roles: [OWNER]
+      summary: Get all reservation history
+      description: Requires the OWNER role. Omit `status` to include all lifecycle states.
+      parameters:
+        - $ref: '#/components/parameters/ReservationStatusFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Page containing reservations for every client and book.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/reservations/my:
+    get:
+      tags: [Reservations]
+      operationId: getMyReservations
+      x-required-roles: [CLIENT]
+      summary: Get the authenticated client's reservation history
+      parameters:
+        - $ref: '#/components/parameters/ReservationStatusFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Page containing only this client's reservations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/reservations/books/{bookId}/queue:
+    parameters:
+      - $ref: '#/components/parameters/ReservationBookId'
+    get:
+      tags: [Reservations]
+      operationId: getBookReservationQueue
+      x-required-roles: [OWNER]
+      summary: Inspect a book's active FIFO queue
+      description: Requires the OWNER role. Returns `READY` and `WAITING` reservations in queue order.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Active queue ordered by original queue time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/reservations/{reservationId}:
+    parameters:
+      - $ref: '#/components/parameters/ReservationId'
+    get:
+      tags: [Reservations]
+      operationId: getReservation
+      x-required-roles: [CLIENT, OWNER]
+      x-resource-ownership: Clients can access only their own reservation; owners can access any reservation.
+      summary: Get one reservation
+      description: Owners can view any reservation; clients can view only their own.
+      responses:
+        '200':
+          description: Reservation found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/reservations/{reservationId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ReservationId'
+    post:
+      tags: [Reservations]
+      operationId: cancelReservation
+      x-required-roles: [CLIENT]
+      x-resource-ownership: The authenticated client must own the reservation.
+      summary: Cancel the authenticated client's active reservation
+      description: A `WAITING` or `READY` reservation can be cancelled; terminal states cannot.
+      responses:
+        '200':
+          description: Cancelled reservation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/search/books/natural:
+    get:
+      tags: [Natural Language Search]
+      operationId: naturalLanguageBookSearch
+      x-required-roles: [CLIENT, OWNER]
+      summary: Search the catalog with a natural-language question
+      description: |
+        Interprets common English and Portuguese availability expressions and
+        extracts catalog keywords without removing accents from searchable names.
+        The interpretation is returned with the results so clients and AI agents
+        can inspect exactly what was applied.
+      parameters:
+        - name: question
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 300
+          example: Find available books by Martin Fowler
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/BookSort'
+      responses:
+        '200':
+          description: Interpreted query and matching active books.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NaturalLanguageSearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/recommendations/my:
+    get:
+      tags: [Recommendations]
+      operationId: getMyRecommendations
+      x-required-roles: [CLIENT]
+      summary: Recommend books to the authenticated client
+      description: |
+        Excludes previously borrowed books and ranks the remaining active catalog
+        using author affinity, enriched-subject overlap, loan popularity, and
+        current availability. Every item includes human-readable scoring reasons.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 5
+      responses:
+        '200':
+          description: Ranked recommendations. The array can be empty.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecommendationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/books/{bookId}/metadata:
+    parameters:
+      - $ref: '#/components/parameters/MetadataBookId'
+    get:
+      tags: [Metadata Enrichment]
+      operationId: getBookMetadata
+      x-required-roles: [CLIENT, OWNER]
+      summary: Get persisted enriched metadata for a book
+      responses:
+        '200':
+          description: Latest persisted metadata snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookMetadataResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/books/{bookId}/metadata/enrich:
+    parameters:
+      - $ref: '#/components/parameters/MetadataBookId'
+    post:
+      tags: [Metadata Enrichment]
+      operationId: enrichBookMetadata
+      x-required-roles: [OWNER]
+      summary: Fetch and persist metadata by the book's ISBN
+      description: |
+        Requires OWNER. Repeating the operation updates the same versioned record.
+        The remote lookup runs outside the database transaction; persistence locks
+        and rechecks the book ISBN, returning 409 if it changed during the lookup.
+      responses:
+        '200':
+          description: Newly created or refreshed metadata snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookMetadataResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+  /api/assistant/chat:
+    post:
+      tags: [Chat Assistant]
+      operationId: chatWithLibraryAssistant
+      x-required-roles: [CLIENT, OWNER]
+      summary: Ask a read-only question about live library data
+      description: |
+        Routes the message to catalog search, recommendations, loans,
+        reservations, late fees, or help. It performs no state-changing action;
+        mutations remain explicit REST or MCP commands.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantRequest'
+            example:
+              message: Recommend a book for me
+      responses:
+        '200':
+          description: Grounded role-aware assistant response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+  parameters:
+    BookId:
+      name: id
+      in: path
+      required: true
+      description: Book identifier.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+    LoanId:
+      name: loanId
+      in: path
+      required: true
+      description: Loan identifier.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+    LateFeeId:
+      name: feeId
+      in: path
+      required: true
+      description: Late-fee identifier.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+    LateFeeStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Optional lifecycle-state filter.
+      schema:
+        $ref: '#/components/schemas/LateFeeStatus'
+    ReservationId:
+      name: reservationId
+      in: path
+      required: true
+      description: Reservation identifier.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+    ReservationBookId:
+      name: bookId
+      in: path
+      required: true
+      description: Book whose active queue should be inspected.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 2
+    MetadataBookId:
+      name: bookId
+      in: path
+      required: true
+      description: Book whose persisted metadata is requested or refreshed.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+    ReservationStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Optional reservation lifecycle-state filter.
+      schema:
+        $ref: '#/components/schemas/ReservationStatus'
+    Page:
+      name: page
+      in: query
+      description: Zero-based page index.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      description: Items per page; the application caps this value at 100.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    BookSort:
+      name: sort
+      in: query
+      description: Sort expression as `property,direction`; repeat for multiple fields.
+      schema:
+        type: array
+        items:
+          type: string
+        default: ['title,asc']
+      style: form
+      explode: true
+    LoanSort:
+      name: sort
+      in: query
+      description: Optional Spring Data sort expression as `property,direction`.
+      schema:
+        type: array
+        items:
+          type: string
+      style: form
+      explode: true
+  responses:
+    BadRequest:
+      description: Invalid request body, parameter, or pagination value.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unauthorized:
+      description: Missing or invalid HTTP Basic credentials.
+    Forbidden:
+      description: The authenticated role or client ownership does not permit the operation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: The requested active book, loan, or authenticated database user was not found.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Conflict:
+      description: The request conflicts with current inventory, loan, or unique-ISBN state.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    BadGateway:
+      description: The external metadata provider could not be reached or returned an error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+  schemas:
+    BookRequest:
+      type: object
+      additionalProperties: false
+      required: [isbn, title, author, totalCopies]
+      properties:
+        isbn:
+          type: string
+          maxLength: 20
+          pattern: '^(?:(?:[0-9][ -]?){9}[0-9Xx]|(?:[0-9][ -]?){12}[0-9])$'
+          example: '9780321356680'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Effective Java
+        author:
+          type: string
+          minLength: 1
+          maxLength: 150
+          example: Joshua Bloch
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+          example: Best practices for the Java platform.
+        totalCopies:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          example: 2
+    BookResponse:
+      type: object
+      required: [id, isbn, title, author, totalCopies, availableCopies, available]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        isbn:
+          type: string
+          example: '9780132350884'
+        title:
+          type: string
+          example: Clean Code
+        author:
+          type: string
+          example: Robert C. Martin
+        description:
+          type: string
+          nullable: true
+          example: A handbook of agile software craftsmanship.
+        totalCopies:
+          type: integer
+          format: int32
+          example: 2
+        availableCopies:
+          type: integer
+          format: int32
+          example: 1
+        available:
+          type: boolean
+          description: True when `availableCopies` is greater than zero.
+          example: true
+    BorrowBookRequest:
+      type: object
+      additionalProperties: false
+      required: [bookId, loanDays]
+      properties:
+        bookId:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 1
+        loanDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 60
+          example: 14
+    LoanResponse:
+      type: object
+      required: [id, book, borrower, borrowedAt, dueAt, returnedLate, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 42
+        book:
+          $ref: '#/components/schemas/BookSummary'
+        borrower:
+          $ref: '#/components/schemas/BorrowerSummary'
+        borrowedAt:
+          type: string
+          format: date-time
+          example: '2026-08-01T12:00:00Z'
+        dueAt:
+          type: string
+          format: date-time
+          example: '2026-08-15T12:00:00Z'
+        returnedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-08-10T09:30:00Z'
+        returnedLate:
+          type: boolean
+          example: false
+        status:
+          $ref: '#/components/schemas/LoanStatus'
+    BookSummary:
+      type: object
+      required: [id, isbn, title]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        isbn:
+          type: string
+          example: '9780132350884'
+        title:
+          type: string
+          example: Clean Code
+    BorrowerSummary:
+      type: object
+      required: [username, displayName]
+      properties:
+        username:
+          type: string
+          example: client
+        displayName:
+          type: string
+          example: Demo Client
+    LoanStatus:
+      type: string
+      enum: [ACTIVE, OVERDUE, RETURNED_ON_TIME, RETURNED_LATE]
+      example: ACTIVE
+    PageMetadata:
+      type: object
+      required: [size, number, totalElements, totalPages]
+      properties:
+        size:
+          type: integer
+          format: int32
+          example: 20
+        number:
+          type: integer
+          format: int32
+          description: Zero-based page index.
+          example: 0
+        totalElements:
+          type: integer
+          format: int64
+          example: 3
+        totalPages:
+          type: integer
+          format: int32
+          example: 1
+    BookPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    LoanPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoanResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    LateFeeStatus:
+      type: string
+      enum: [OUTSTANDING, PAID, WAIVED]
+      example: OUTSTANDING
+    LateFeeSettlementAction:
+      type: string
+      enum: [PAID, WAIVED]
+      example: PAID
+    LateFeeSettlementRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          $ref: '#/components/schemas/LateFeeSettlementAction'
+        note:
+          type: string
+          nullable: true
+          maxLength: 500
+          example: Receipt 42
+    LateFeeResponse:
+      type: object
+      required:
+        - id
+        - loanId
+        - book
+        - borrower
+        - daysLate
+        - dailyRate
+        - amount
+        - currency
+        - status
+        - registeredAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        loanId:
+          type: integer
+          format: int64
+          example: 42
+        book:
+          $ref: '#/components/schemas/BookSummary'
+        borrower:
+          $ref: '#/components/schemas/BorrowerSummary'
+        daysLate:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Number of started 24-hour overdue periods charged.
+          example: 3
+        dailyRate:
+          type: number
+          format: double
+          multipleOf: 0.01
+          example: 0.50
+        amount:
+          type: number
+          format: double
+          multipleOf: 0.01
+          description: Immutable `daysLate * dailyRate` registration snapshot.
+          example: 1.50
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: EUR
+        status:
+          $ref: '#/components/schemas/LateFeeStatus'
+        registeredAt:
+          type: string
+          format: date-time
+          example: '2026-08-18T12:00:00Z'
+        settledAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-08-19T09:30:00Z'
+        settlementNote:
+          type: string
+          nullable: true
+          maxLength: 500
+          example: Receipt 42
+    LateFeePage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/LateFeeResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    ReservationStatus:
+      type: string
+      enum: [WAITING, READY, FULFILLED, CANCELLED, EXPIRED]
+      example: WAITING
+    ReserveBookRequest:
+      type: object
+      additionalProperties: false
+      required: [bookId]
+      properties:
+        bookId:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 2
+    ReservationResponse:
+      type: object
+      required: [id, book, borrower, status, queuedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 7
+        book:
+          $ref: '#/components/schemas/BookSummary'
+        borrower:
+          $ref: '#/components/schemas/BorrowerSummary'
+        status:
+          $ref: '#/components/schemas/ReservationStatus'
+        queuePosition:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 1
+          description: Current FIFO position for `WAITING`; null for all other states.
+          example: 2
+        queuedAt:
+          type: string
+          format: date-time
+          example: '2026-08-01T12:00:00Z'
+        readyAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Deadline for a `READY` client to borrow the allocated copy.
+        fulfilledAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiredAt:
+          type: string
+          format: date-time
+          nullable: true
+    ReservationPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservationResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    NaturalLanguageQuery:
+      type: object
+      required: [originalQuestion, catalogQuery]
+      properties:
+        originalQuestion:
+          type: string
+          example: Find available books by Martin Fowler
+        catalogQuery:
+          type: string
+          example: martin fowler
+        availableOnly:
+          type: boolean
+          nullable: true
+          description: True, false, or null when no availability intent was detected.
+          example: true
+    NaturalLanguageSearchResponse:
+      type: object
+      required: [interpretation, books, page]
+      properties:
+        interpretation:
+          $ref: '#/components/schemas/NaturalLanguageQuery'
+        books:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    RecommendationResponse:
+      type: object
+      required: [book, score, reasons]
+      properties:
+        book:
+          $ref: '#/components/schemas/BookResponse'
+        score:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Explainable relative ranking score; larger values rank first.
+          example: 12
+        reasons:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          example:
+            - Available now
+            - Matches an author from your borrowing history
+    BookMetadataResponse:
+      type: object
+      required: [bookId, isbn, title, subjects, source, enrichedAt]
+      properties:
+        bookId:
+          type: integer
+          format: int64
+          example: 1
+        isbn:
+          type: string
+          example: '9780132350884'
+        title:
+          type: string
+          example: Clean Code
+        publisher:
+          type: string
+          nullable: true
+          example: Prentice Hall
+        publishedYear:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 1000
+          maximum: 9999
+          example: 2008
+        subjects:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+          example: [Programming, Software design]
+        coverUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://covers.openlibrary.org/b/id/123-L.jpg?default=false
+        source:
+          type: string
+          example: OPEN_LIBRARY
+        sourceUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://openlibrary.org/works/OL1W
+        enrichedAt:
+          type: string
+          format: date-time
+    AssistantRequest:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+          example: Show my loans
+    AssistantIntent:
+      type: string
+      enum:
+        - HELP
+        - SEARCH_BOOKS
+        - RECOMMENDATIONS
+        - MY_LOANS
+        - MY_RESERVATIONS
+        - MY_LATE_FEES
+        - ROLE_RESTRICTED
+    AssistantResponse:
+      type: object
+      required:
+        - intent
+        - reply
+        - recommendations
+        - loans
+        - reservations
+        - lateFees
+        - suggestions
+      properties:
+        intent:
+          $ref: '#/components/schemas/AssistantIntent'
+        reply:
+          type: string
+        search:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/NaturalLanguageSearchResponse'
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecommendationResponse'
+        loans:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoanResponse'
+        reservations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservationResponse'
+        lateFees:
+          type: array
+          items:
+            $ref: '#/components/schemas/LateFeeResponse'
+        suggestions:
+          type: array
+          items:
+            type: string
+    ProblemDetail:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          format: uri
+          default: about:blank
+        title:
+          type: string
+          example: Validation failed
+        status:
+          type: integer
+          format: int32
+          example: 400
+        detail:
+          type: string
+          example: One or more request fields are invalid
+        instance:
+          type: string
+          format: uri
+          example: http://localhost:8080/api/books
+        timestamp:
+          type: string
+          format: date-time
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            isbn: must be a valid ISBN-10 or ISBN-13
